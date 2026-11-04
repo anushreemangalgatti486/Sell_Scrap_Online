@@ -4,6 +4,7 @@ const Bid      = require('../models/Bid')
 const Material = require('../models/Material')
 const { protect, restrictTo, requireVerified } = require('../middleware/auth')
 const { createNotification } = require('../utils/notifications')
+const { emitBidUpdate } = require('../utils/socket')
 
 // POST /api/bids/:materialId — place a bid
 router.post('/:materialId', protect, restrictTo('buyer'), requireVerified, async (req, res) => {
@@ -82,6 +83,16 @@ router.post('/:materialId', protect, restrictTo('buyer'), requireVerified, async
       `A new bid of ₹${(+amount).toLocaleString()} has been placed on ${material.name}.`,
       { materialId: material._id }
     )
+
+    // Emit real-time update to all clients watching this auction
+    emitBidUpdate(material._id.toString(), {
+      materialId:        material._id,
+      currentHighestBid: material.currentHighestBid,
+      bidsCount:         material.bidsCount,
+      anonymousLabel:    bid.anonymousLabel,
+      amount:            bid.amount,
+      createdAt:         bid.createdAt,
+    })
 
     res.status(201).json({ bid: { ...bid.toObject(), bidder: undefined } })
   } catch (err) {

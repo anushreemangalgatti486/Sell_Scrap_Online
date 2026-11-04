@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { materialsAPI, bidsAPI } from '../services/api'
 import Navbar from '../components/common/Navbar'
 import Footer from '../components/common/Footer'
+import useAuctionSocket from '../hooks/useAuctionSocket'
 import {
   Clock, Package, MapPin, CheckCircle2, ArrowLeft,
   ChevronLeft, ChevronRight, TrendingUp, Scale, Gavel, User
@@ -41,7 +42,6 @@ export default function MaterialDetailPage() {
   const [bidAmount,  setBidAmount] = useState('')
   const [placing,    setPlacing]   = useState(false)
   const [imgIdx,     setImgIdx]    = useState(0)
-  const [pollTimer,  setPollTimer] = useState(null)
 
   const fetchMaterial = useCallback(async () => {
     try {
@@ -61,11 +61,31 @@ export default function MaterialDetailPage() {
 
   useEffect(() => {
     fetchMaterial()
-    // Poll every 15 seconds for fresh bid data
-    const t = setInterval(fetchMaterial, 15000)
-    setPollTimer(t)
-    return () => clearInterval(t)
   }, [fetchMaterial])
+
+  // Real-time socket updates — replaces the old 15-second poll
+  useAuctionSocket(id, {
+    onBidNew: (data) => {
+      // Update bid stats instantly
+      setMaterial(prev => prev ? {
+        ...prev,
+        currentHighestBid: data.currentHighestBid,
+        bidsCount: data.bidsCount,
+      } : prev)
+      // Prepend new bid to history
+      setBids(prev => [{
+        _id:            Date.now().toString(),
+        amount:         data.amount,
+        anonymousLabel: data.anonymousLabel,
+        createdAt:      data.createdAt,
+      }, ...prev])
+    },
+    onAuctionClose: () => {
+      // Refresh fully when auction closes so winner info shows
+      fetchMaterial()
+      toast('This auction has just closed.', { icon: '🔔' })
+    },
+  })
 
   const handleBid = async (e) => {
     e.preventDefault()

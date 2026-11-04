@@ -2,6 +2,7 @@ const Material     = require('../models/Material')
 const Bid          = require('../models/Bid')
 const Transaction  = require('../models/Transaction')
 const { createNotification } = require('./notifications')
+const { emitAuctionClosed } = require('./socket')
 
 exports.closeExpiredAuctions = async () => {
   const now = new Date()
@@ -82,6 +83,14 @@ exports.closeExpiredAuctions = async () => {
           { materialId: material._id }
         )
       }
+
+      // Emit real-time auction closed event
+      emitAuctionClosed(material._id.toString(), {
+        materialId:   material._id,
+        status:       'closed',
+        winningBid:   winningBid.amount,
+        closedAt:     now,
+      })
 
     } catch (err) {
       console.error(`Error closing auction for material ${material._id}:`, err.message)

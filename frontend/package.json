@@ -17,7 +17,8 @@
     "react-dropzone": "^14.2.10",
     "react-hot-toast": "^2.4.1",
     "react-router-dom": "^6.26.2",
-    "recharts": "^2.13.0"
+    "recharts": "^2.13.0",
+    "socket.io-client": "^4.8.4"
   },
   "devDependencies": {
     "@types/react": "^18.3.11",

@@ -1,4 +1,5 @@
 require('dotenv').config()
+const http      = require('http')
 const express   = require('express')
 const cors      = require('cors')
 const helmet    = require('helmet')
@@ -6,6 +7,7 @@ const rateLimit = require('express-rate-limit')
 const mongoose  = require('mongoose')
 const path      = require('path')
 const cron      = require('node-cron')
+const { initSocket } = require('./utils/socket')
 
 const authRoutes         = require('./routes/auth')
 const materialRoutes     = require('./routes/materials')
@@ -21,8 +23,12 @@ const sellerRoutes       = require('./routes/seller')
 const { closeExpiredAuctions } = require('./utils/auctionJobs')
 const { seedAdmin }            = require('./utils/seedAdmin')
 
-const app  = express()
-const PORT = process.env.PORT || 5002
+const app        = express()
+const httpServer = http.createServer(app)
+const PORT       = process.env.PORT || 5002
+
+// Initialise Socket.io
+initSocket(httpServer)
 
 /* ─── Middleware ─── */
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
@@ -116,7 +122,7 @@ async function main() {
     console.log(`   Admin → ${process.env.ADMIN_EMAIL || 'admin@scrapbazaar.in'} / ${process.env.ADMIN_PASSWORD || 'Admin@123456'}`)
   }
 
-  app.listen(PORT, () => {
+  httpServer.listen(PORT, () => {
     console.log(`\n🚀 ScrapBazaar API  →  http://localhost:${PORT}`)
     console.log(`   DB: ${dbOk ? 'Connected ✅' : 'NOT connected ❌  — registration/login will fail'}`)
     console.log(`   Health: http://localhost:${PORT}/api/health\n`)

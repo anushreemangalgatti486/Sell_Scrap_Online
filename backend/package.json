@@ -23,7 +23,8 @@
     "multer-storage-cloudinary": "^4.0.0",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.16",
-    "razorpay": "^2.9.4"
+    "razorpay": "^2.9.4",
+    "socket.io": "^4.8.4"
   },
   "devDependencies": {
     "nodemon": "^3.1.7"

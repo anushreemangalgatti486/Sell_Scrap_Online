@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Zap, Clock, Package } from 'lucide-react'
 import { materialsAPI } from '../../services/api'
 import { formatDistanceToNow } from 'date-fns'
+import useAuctionSocket from '../../hooks/useAuctionSocket'
 import './BuyerComponents.css'
 
 export default function BuyerLiveAuctions({ setTitle }) {
@@ -16,6 +17,25 @@ export default function BuyerLiveAuctions({ setTitle }) {
       .catch(() => setItems([]))
       .finally(() => setLoading(false))
   }, [])
+
+  // Listen to socket events for every active auction on this page
+  // We join all rooms; updates patch the matching item in state
+  const allIds = items.map(m => m._id)
+
+  // Single socket connection per rendered auction card would be wasteful,
+  // so we use one connection and handle routing by materialId in the payload
+  useAuctionSocket(allIds.length ? 'overview' : null, {
+    onBidNew: (data) => {
+      setItems(prev => prev.map(m =>
+        m._id === data.materialId?.toString()
+          ? { ...m, currentHighestBid: data.currentHighestBid, bidsCount: data.bidsCount }
+          : m
+      ))
+    },
+    onAuctionClose: (data) => {
+      setItems(prev => prev.filter(m => m._id !== data.materialId?.toString()))
+    },
+  })
 
   return (
     <div>
