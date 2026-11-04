@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Environment files (NEVER commit secrets)
+.env
+frontend/.env
+backend/.env
+
+# Build output
+frontend/dist/
+frontend/build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Uploads (user-uploaded files, not for git)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# MongoDB memory server cache
+backend/node_modules/.cache/
+
+# Vite cache
+frontend/node_modules/.vite/
+
+# IDE
+.vscode/
+.idea/

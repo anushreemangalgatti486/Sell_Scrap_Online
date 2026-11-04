@@ -1,0 +1,126 @@
+const express         = require('express')
+const router          = express.Router()
+const User            = require('../models/User')
+const BusinessProfile = require('../models/BusinessProfile')
+const Material        = require('../models/Material')
+const { protect, restrictTo } = require('../middleware/auth')
+const { createNotification } = require('../utils/notifications')
+
+// All admin routes require admin role
+router.use(protect, restrictTo('admin'))
+
+// GET /api/admin/stats
+router.get('/stats', async (req, res) => {
+  try {
+    const [totalUsers, pendingVerifications, activeListings, activeAuctions] = await Promise.all([
+      User.countDocuments({ role: { $in: ['buyer', 'seller'] } }),
+      User.countDocuments({ verificationStatus: 'pending' }),
+      Material.countDocuments({ isActive: true }),
+      Material.countDocuments({ 'auction.status': 'active' }),
+    ])
+    res.json({ totalUsers, pendingVerifications, activeListings, activeAuctions })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// GET /api/admin/users
+router.get('/users', async (req, res) => {
+  try {
+    const { search, role } = req.query
+    const query = {}
+    if (role) query.role = role
+    if (search) {
+      query.$or = [
+        { name:  { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ]
+    }
+    const users = await User.find(query).populate('businessProfile').sort({ createdAt: -1 }).lean()
+    res.json({ users })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// GET /api/admin/verifications/pending
+router.get('/verifications/pending', async (req, res) => {
+  try {
+    const pendingUsers = await User.find({ verificationStatus: 'pending' }).lean()
+    const verifications = await Promise.all(pendingUsers.map(async u => {
+      const profile = await BusinessProfile.findOne({ user: u._id }).lean()
+      return { ...profile, user: u }
+    }))
+    res.json({ verifications: verifications.filter(Boolean) })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// POST /api/admin/verifications/:userId/approve
+router.post('/verifications/:userId/approve', async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.params.userId,
+      { verificationStatus: 'approved' },
+      { new: true }
+    )
+    if (!user) return res.status(404).json({ message: 'User not found' })
+    await createNotification(
+      user._id,
+      'verification',
+      'Your business has been verified and approved! You can now access all marketplace features.',
+    )
+    res.json({ message: 'Business approved', user })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// POST /api/admin/verifications/:userId/reject
+router.post('/verifications/:userId/reject', async (req, res) => {
+  try {
+    const { reason } = req.body
+    if (!reason) return res.status(400).json({ message: 'Rejection reason is required' })
+    const user = await User.findByIdAndUpdate(
+      req.params.userId,
+      { verificationStatus: 'rejected', rejectionReason: reason },
+      { new: true }
+    )
+    if (!user) return res.status(404).json({ message: 'User not found' })
+    await createNotification(
+      user._id,
+      'verification',
+      `Your business verification was not approved. Reason: ${reason}. Please resubmit with the required information.`,
+    )
+    res.json({ message: 'Verification rejected' })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// GET /api/admin/listings
+router.get('/listings', async (req, res) => {
+  try {
+    const listings = await Material.find({ isActive: true })
+      .select('-minAcceptablePrice')
+      .sort({ createdAt: -1 })
+      .populate('seller', 'name businessName')
+      .lean()
+    res.json({ listings })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// DELETE /api/admin/listings/:id
+router.delete('/listings/:id', async (req, res) => {
+  try {
+    await Material.findByIdAndUpdate(req.params.id, { isActive: false })
+    res.json({ message: 'Listing removed' })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+module.exports = router
