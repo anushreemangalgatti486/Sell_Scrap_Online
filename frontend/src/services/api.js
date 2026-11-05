@@ -78,13 +78,15 @@ export const notificationsAPI = {
 }
 
 export const adminAPI = {
-  getUsers:      (params) => api.get('/admin/users', { params }),
-  getPending:    ()       => api.get('/admin/verifications/pending'),
-  approve:       (id)     => api.post(`/admin/verifications/${id}/approve`),
-  reject:        (id, r)  => api.post(`/admin/verifications/${id}/reject`, { reason: r }),
-  getListings:   (params) => api.get('/admin/listings', { params }),
-  removeListing: (id)     => api.delete(`/admin/listings/${id}`),
-  getStats:      ()       => api.get('/admin/stats'),
+  getUsers:        (params) => api.get('/admin/users', { params }),
+  suspendUser:     (id, active) => api.post(`/admin/users/${id}/suspend`, { active }),
+  getPending:      ()       => api.get('/admin/verifications/pending'),
+  approve:         (id)     => api.post(`/admin/verifications/${id}/approve`),
+  reject:          (id, r)  => api.post(`/admin/verifications/${id}/reject`, { reason: r }),
+  getListings:     (params) => api.get('/admin/listings', { params }),
+  removeListing:   (id)     => api.delete(`/admin/listings/${id}`),
+  getStats:        ()       => api.get('/admin/stats'),
+  getTransactions: ()       => api.get('/admin/transactions'),
 }
 
 export const businessAPI = {

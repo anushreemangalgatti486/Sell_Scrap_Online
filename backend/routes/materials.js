@@ -135,4 +135,43 @@ router.delete('/:id', protect, restrictTo('seller', 'admin'), async (req, res) =
   }
 })
 
+// PUT /api/materials/:id — edit listing (seller who owns it, or admin)
+router.put('/:id', protect, restrictTo('seller', 'admin'), async (req, res) => {
+  try {
+    const material = await Material.findById(req.params.id).select('+minAcceptablePrice')
+    if (!material) return res.status(404).json({ message: 'Material not found' })
+
+    // Ownership check — sellers can only edit their own listings
+    if (req.user.role === 'seller' && !material.seller.equals(req.user._id)) {
+      return res.status(403).json({ message: 'Not authorized to edit this listing' })
+    }
+
+    // Cannot edit while auction is active
+    if (material.auction?.status === 'active') {
+      return res.status(400).json({ message: 'Cannot edit a listing while auction is active' })
+    }
+
+    // Whitelist of editable fields — never allow changing seller or minAcceptablePrice via PUT
+    const allowed = [
+      'name', 'description', 'specifications', 'grade', 'deliveryTerms',
+      'quantity', 'unit', 'location', 'stockAvailability',
+    ]
+    allowed.forEach(field => {
+      if (req.body[field] !== undefined) material[field] = req.body[field]
+    })
+
+    // Allow updating minAcceptablePrice only for the owning seller
+    if (req.user.role === 'seller' && req.body.minAcceptablePrice !== undefined) {
+      material.minAcceptablePrice = +req.body.minAcceptablePrice || undefined
+    }
+
+    await material.save()
+    const safeObj = material.toObject()
+    delete safeObj.minAcceptablePrice
+    res.json({ material: safeObj })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
 module.exports = router

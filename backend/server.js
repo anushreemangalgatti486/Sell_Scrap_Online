@@ -7,7 +7,8 @@ const rateLimit = require('express-rate-limit')
 const mongoose  = require('mongoose')
 const path      = require('path')
 const cron      = require('node-cron')
-const { initSocket } = require('./utils/socket')
+const { initSocket }       = require('./utils/socket')
+const { validateJwtSecret } = require('./utils/jwt')
 
 const authRoutes         = require('./routes/auth')
 const materialRoutes     = require('./routes/materials')
@@ -27,22 +28,72 @@ const app        = express()
 const httpServer = http.createServer(app)
 const PORT       = process.env.PORT || 5002
 
-// Initialise Socket.io
+// Validate JWT secret before anything else starts
+validateJwtSecret()
+
+// Initialise Socket.io (with auth — see utils/socket.js)
 initSocket(httpServer)
+
+/* ─── CORS allowlist ─── */
+const buildAllowedOrigins = () => {
+  const origins = new Set()
+
+  // Always allow the configured frontend URL
+  const frontendUrl = process.env.FRONTEND_URL
+  if (frontendUrl) {
+    frontendUrl.split(',').map(o => o.trim()).filter(Boolean).forEach(o => origins.add(o))
+  }
+
+  // Any additional origins from EXTRA_ORIGINS (comma-separated)
+  const extra = process.env.EXTRA_ORIGINS
+  if (extra) {
+    extra.split(',').map(o => o.trim()).filter(Boolean).forEach(o => origins.add(o))
+  }
+
+  // In development always allow localhost variants
+  if (process.env.NODE_ENV !== 'production') {
+    origins.add('http://localhost:5173')
+    origins.add('http://localhost:5174')
+    origins.add('http://localhost:3000')
+  }
+
+  return [...origins]
+}
+
+const allowedOrigins = buildAllowedOrigins()
 
 /* ─── Middleware ─── */
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
 app.use(cors({
-  origin: (origin, cb) => cb(null, true),   // allow all origins in dev
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, Postman in dev)
+    if (!origin) return callback(null, true)
+    if (allowedOrigins.includes(origin)) return callback(null, true)
+    callback(new Error(`CORS: origin '${origin}' is not allowed`))
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }))
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }))
+
+// Global rate limit — 300 requests per 15 minutes per IP
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false }))
+
+// Stricter rate limit on auth routes — 20 requests per 15 minutes per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { message: 'Too many authentication attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
 /* ─── Routes ─── */
-app.use('/api/auth',          authRoutes)
+app.use('/api/auth',          authLimiter, authRoutes)
 app.use('/api/materials',     materialRoutes)
 app.use('/api/bids',          bidRoutes)
 app.use('/api/auctions',      auctionRoutes)

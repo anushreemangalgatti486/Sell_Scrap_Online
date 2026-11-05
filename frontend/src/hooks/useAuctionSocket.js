@@ -8,13 +8,13 @@ const SOCKET_URL = import.meta.env.VITE_API_URL
 /**
  * useAuctionSocket
  *
- * Connects to the Socket.io server, joins the room for a specific auction,
- * and calls your callbacks when events fire.
+ * Connects to the Socket.io server with JWT authentication,
+ * joins the room for a specific auction, and fires callbacks on events.
  *
- * @param {string|null} materialId  - The auction material ID to watch (or null to skip)
+ * @param {string|null} materialId  — auction material ID to watch (null to skip)
  * @param {object}      callbacks
- * @param {function}    callbacks.onBidNew      - Called with bid payload on new bid
- * @param {function}    callbacks.onAuctionClose - Called with payload when auction closes
+ * @param {function}    callbacks.onBidNew       — called with bid payload on new bid
+ * @param {function}    callbacks.onAuctionClose — called with payload when auction closes
  */
 export default function useAuctionSocket(materialId, { onBidNew, onAuctionClose } = {}) {
   const socketRef = useRef(null)
@@ -22,28 +22,28 @@ export default function useAuctionSocket(materialId, { onBidNew, onAuctionClose 
   useEffect(() => {
     if (!materialId) return
 
+    // Read token from localStorage — same source the axios instance uses
+    const token = localStorage.getItem('sb_token')
+
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 5,
+      // Pass JWT in the auth handshake — validated server-side
+      auth: token ? { token } : {},
     })
 
     socketRef.current = socket
 
     socket.emit('join:auction', materialId)
 
-    if (onBidNew) {
-      socket.on('bid:new', onBidNew)
-    }
-
-    if (onAuctionClose) {
-      socket.on('auction:closed', onAuctionClose)
-    }
+    if (onBidNew) socket.on('bid:new', onBidNew)
+    if (onAuctionClose) socket.on('auction:closed', onAuctionClose)
 
     return () => {
       socket.emit('leave:auction', materialId)
       socket.disconnect()
     }
-  }, [materialId])  // reconnect if materialId changes
+  }, [materialId])
 
   return socketRef
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { transactionsAPI } from '../../services/api'
+import { adminAPI } from '../../services/api'
 import { CreditCard } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -9,7 +9,7 @@ export default function AdminTransactions({ setTitle }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    transactionsAPI.getMine()
+    adminAPI.getTransactions()
       .then(r => setTxns(r.data.transactions || []))
       .catch(() => setTxns([]))
       .finally(() => setLoading(false))

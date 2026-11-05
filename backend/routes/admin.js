@@ -123,4 +123,40 @@ router.delete('/listings/:id', async (req, res) => {
   }
 })
 
+// GET /api/admin/transactions — all platform transactions (admin only)
+router.get('/transactions', async (req, res) => {
+  try {
+    const Transaction = require('../models/Transaction')
+    const txns = await Transaction.find()
+      .sort({ createdAt: -1 })
+      .populate('material', 'name category')
+      .populate('buyer',  'name businessName')
+      .populate('seller', 'name businessName')
+      .lean()
+    res.json({ transactions: txns })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// POST /api/admin/users/:userId/suspend — suspend or activate a user
+router.post('/users/:userId/suspend', async (req, res) => {
+  try {
+    const { active } = req.body
+    if (typeof active !== 'boolean') {
+      return res.status(400).json({ message: '`active` boolean is required' })
+    }
+    const user = await User.findById(req.params.userId)
+    if (!user) return res.status(404).json({ message: 'User not found' })
+    if (user.role === 'admin') {
+      return res.status(403).json({ message: 'Cannot suspend admin accounts via this endpoint' })
+    }
+    user.isActive = active
+    await user.save()
+    res.json({ message: active ? 'User activated' : 'User suspended', userId: user._id })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
 module.exports = router
