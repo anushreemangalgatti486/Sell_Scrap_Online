@@ -87,6 +87,8 @@ export const adminAPI = {
   removeListing:   (id)     => api.delete(`/admin/listings/${id}`),
   getStats:        ()       => api.get('/admin/stats'),
   getTransactions: ()       => api.get('/admin/transactions'),
+  getAuctions:     (params) => api.get('/admin/auctions', { params }),
+  closeAuction:    (id)     => api.post(`/admin/auctions/${id}/close`),
 }
 
 export const businessAPI = {

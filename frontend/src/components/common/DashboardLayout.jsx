@@ -26,7 +26,7 @@ export default function DashboardLayout({
   tabItems,
   onTabChange,
 }) {
-  const { user, logout } = useAuth()
+  const { user, logout, unreadCount } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
@@ -161,7 +161,9 @@ export default function DashboardLayout({
             </button>
             <button className="btn btn-ghost btn-icon notification-btn" aria-label="Notifications">
               <Bell size={17} />
-              <span className="notif-dot" />
+              {unreadCount > 0 && (
+                <span className="notif-dot" aria-label={`${unreadCount} unread`} />
+              )}
             </button>
             <div className="dash-topbar-user">
               <div className="dash-avatar sm">{user?.name?.charAt(0) || 'U'}</div>

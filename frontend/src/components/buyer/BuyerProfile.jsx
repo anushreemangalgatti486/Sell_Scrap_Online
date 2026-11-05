@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 
 export default function BuyerProfile({ setTitle }) {
   useEffect(() => setTitle('My Business Profile'), [])
-  const { user } = useAuth()
+  const { user, updateUser } = useAuth()
   const [profile, setProfile]   = useState(null)
   const [loading, setLoading]   = useState(true)
   const [editing, setEditing]   = useState(false)
@@ -26,6 +26,8 @@ export default function BuyerProfile({ setTitle }) {
       await businessAPI.updateProfile(form)
       setProfile(form)
       setEditing(false)
+      // Sync the auth context so navbar/topbar reflects updated name
+      if (form.businessName) updateUser({ businessName: form.businessName })
       toast.success('Profile updated')
     } catch { toast.error('Failed to update profile') }
     finally { setSaving(false) }

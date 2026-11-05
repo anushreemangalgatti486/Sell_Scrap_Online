@@ -1,19 +1,36 @@
 import React, { useEffect, useState } from 'react'
 import { Bell, CheckCheck } from 'lucide-react'
 import { notificationsAPI } from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
 import { formatDistanceToNow } from 'date-fns'
 import toast from 'react-hot-toast'
 
 export default function BuyerNotifications({ setTitle }) {
   useEffect(() => setTitle('Notifications'), [])
+  const { clearUnread } = useAuth()
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     notificationsAPI.getMine()
-      .then(r => setNotifications(r.data.notifications || []))
+      .then(r => {
+        setNotifications(r.data.notifications || [])
+        // Clear the bell badge when this page is opened
+        clearUnread()
+      })
       .catch(() => setNotifications([]))
       .finally(() => setLoading(false))
+  }, [])
+
+  // Prepend new notifications that arrive via socket while this page is open
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.detail) {
+        setNotifications(prev => [event.detail, ...prev])
+      }
+    }
+    window.addEventListener('sb:notification', handler)
+    return () => window.removeEventListener('sb:notification', handler)
   }, [])
 
   const markAllRead = async () => {

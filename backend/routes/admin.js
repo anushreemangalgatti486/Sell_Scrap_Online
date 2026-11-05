@@ -99,6 +99,55 @@ router.post('/verifications/:userId/reject', async (req, res) => {
   }
 })
 
+// GET /api/admin/auctions — all auctions (all statuses) for admin view
+router.get('/auctions', async (req, res) => {
+  try {
+    const { status } = req.query
+    const query = { isActive: true }
+    if (status) query['auction.status'] = status
+
+    const materials = await Material.find(query)
+      .select('-minAcceptablePrice')
+      .sort({ 'auction.endTime': 1 })
+      .populate('seller', 'businessName verificationStatus')
+      .lean()
+
+    const auctions = materials.map(m => ({
+      _id:              m._id,
+      material:         m,
+      status:           m.auction.status,
+      endTime:          m.auction.endTime,
+      currentHighestBid: m.currentHighestBid,
+      bidsCount:        m.bidsCount,
+    }))
+    res.json({ auctions })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// POST /api/admin/auctions/:materialId/close — force-close an active auction
+router.post('/auctions/:materialId/close', async (req, res) => {
+  try {
+    const material = await Material.findById(req.params.materialId)
+    if (!material) return res.status(404).json({ message: 'Material not found' })
+    if (material.auction?.status !== 'active') {
+      return res.status(400).json({ message: 'Auction is not currently active' })
+    }
+
+    // Run the same close logic as the cron job
+    const { closeExpiredAuctions } = require('../utils/auctionJobs')
+    // Force close by setting endTime to now and running the job
+    material.auction.endTime = new Date(Date.now() - 1000)
+    await material.save()
+    await closeExpiredAuctions()
+
+    res.json({ message: 'Auction closed successfully' })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
 // GET /api/admin/listings
 router.get('/listings', async (req, res) => {
   try {

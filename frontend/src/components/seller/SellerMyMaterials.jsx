@@ -1,18 +1,90 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { LayoutGrid, List, Plus, Package, Clock, Pencil, Trash2, Eye } from 'lucide-react'
+import { LayoutGrid, List, Plus, Package, Clock, Pencil, Trash2, Eye, X, Save } from 'lucide-react'
 import { materialsAPI } from '../../services/api'
 import { formatDistanceToNow } from 'date-fns'
 import toast from 'react-hot-toast'
 import './SellerComponents.css'
 import '../buyer/BuyerComponents.css'
 
+/* ── inline edit modal ── */
+function EditModal({ material, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    name:          material.name          || '',
+    description:   material.description   || '',
+    grade:         material.grade         || '',
+    quantity:      material.quantity      || '',
+    location:      material.location      || '',
+    deliveryTerms: material.deliveryTerms || '',
+  })
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { toast.error('Name is required'); return }
+    setSaving(true)
+    try {
+      await materialsAPI.update(material._id, form)
+      toast.success('Listing updated')
+      onSaved()
+      onClose()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--bg-overlay)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
+      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-xl)', padding: 28, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h3>Edit Listing</h3>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="form-group">
+            <label className="form-label">Name *</label>
+            <input className="form-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Grade / Quality</label>
+            <input className="form-input" value={form.grade} onChange={e => setForm(f => ({ ...f, grade: e.target.value }))} />
+          </div>
+          <div className="grid-2" style={{ gap: 12 }}>
+            <div className="form-group">
+              <label className="form-label">Quantity</label>
+              <input className="form-input" type="number" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Location</label>
+              <input className="form-input" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Description</label>
+            <textarea className="form-input" rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} style={{ resize: 'vertical' }} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Delivery Terms</label>
+            <input className="form-input" value={form.deliveryTerms} onChange={e => setForm(f => ({ ...f, deliveryTerms: e.target.value }))} />
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+              <Save size={15} /> {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function SellerMyMaterials({ setTitle, sold = false }) {
   useEffect(() => setTitle(sold ? 'Sold Materials' : 'My Materials'), [sold])
-  const [view,     setView]     = useState('grid')
-  const [materials,setMaterials]= useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [search,   setSearch]   = useState('')
+  const [view,      setView]      = useState('grid')
+  const [materials, setMaterials] = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [search,    setSearch]    = useState('')
+  const [editing,   setEditing]   = useState(null) // material being edited
 
   const fetch = useCallback(async () => {
     setLoading(true)
@@ -38,6 +110,13 @@ export default function SellerMyMaterials({ setTitle, sold = false }) {
 
   return (
     <div className="materials-page">
+      {editing && (
+        <EditModal
+          material={editing}
+          onClose={() => setEditing(null)}
+          onSaved={fetch}
+        />
+      )}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12 }}>
         <h2>{sold ? 'Sold Materials' : 'My Materials'}</h2>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
@@ -85,6 +164,9 @@ export default function SellerMyMaterials({ setTitle, sold = false }) {
                 )}
                 <div className="smc-footer" style={{marginTop:8}}>
                   <Link to={`/materials/${m._id}`} className="btn btn-ghost btn-sm"><Eye size={13}/>View</Link>
+                  {!sold && m.auction?.status !== 'active' && (
+                    <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(m)}><Pencil size={13}/>Edit</button>
+                  )}
                   {!sold && m.auction?.status !== 'active' && <button className="btn btn-danger btn-sm" onClick={()=>handleDelete(m._id)}><Trash2 size={13}/></button>}
                 </div>
               </div>
@@ -107,6 +189,9 @@ export default function SellerMyMaterials({ setTitle, sold = false }) {
                   <td><span className={`badge ${m.auction?.status==='active'?'badge-green':m.auction?.status==='closed'?'badge-gray':'badge-amber'}`}>{m.auction?.status||'draft'}</span></td>
                   <td style={{display:'flex',gap:6}}>
                     <Link to={`/materials/${m._id}`} className="btn btn-ghost btn-sm"><Eye size={13}/></Link>
+                    {!sold && m.auction?.status!=='active' && (
+                      <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(m)}><Pencil size={13}/></button>
+                    )}
                     {!sold && m.auction?.status!=='active' && <button className="btn btn-danger btn-sm" onClick={()=>handleDelete(m._id)}><Trash2 size={13}/></button>}
                   </td>
                 </tr>
