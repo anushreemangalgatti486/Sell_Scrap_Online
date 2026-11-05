@@ -180,6 +180,8 @@ export default function PolaroidLineCarousel({
   const [active, setActive] = React.useState(0)
   const [dragging, setDragging] = React.useState(false)
   const [size, setSize] = React.useState({ w: 1200, h: 600, cw: cardWidth })
+  // track which image indices failed to load
+  const [brokenImgs, setBrokenImgs] = React.useState({})
   const rootRef = React.useRef(null)
   const pathRef = React.useRef(null)
   const cards = React.useRef([])
@@ -359,8 +361,13 @@ export default function PolaroidLineCarousel({
                 className="pl-shot"
                 style={{ '--pl-slot-a': pair[0], '--pl-slot-b': pair[1] }}
               >
-                {srcs[i]
-                  ? <img src={srcs[i]} alt={sl.alt || sl.title || ''} draggable={false} />
+                {srcs[i] && !brokenImgs[i]
+                  ? <img
+                      src={srcs[i]}
+                      alt={sl.alt || sl.title || ''}
+                      draggable={false}
+                      onError={() => setBrokenImgs(prev => ({ ...prev, [i]: true }))}
+                    />
                   : (
                     <div className="pl-shot-placeholder">
                       {sl.emoji && <div className="pl-shot-emoji">{sl.emoji}</div>}

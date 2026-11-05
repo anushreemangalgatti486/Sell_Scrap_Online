@@ -57,7 +57,7 @@ const CATEGORIES = [
 /* Carousel slides — one Unsplash photo per scrap category */
 const TRADE_SLIDES = [
   {
-    image: 'https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?q=80&w=1800&auto=format&fit=crop',
+    image: 'https://images.unsplash.com/photo-1566041510639-8d95a2490bfb?q=80&w=1800&auto=format&fit=crop',
     title: 'Iron & Steel',
     caption: 'HMS, MS scrap, CI casting, steel turnings',
     alt: 'Iron and steel scrap',
