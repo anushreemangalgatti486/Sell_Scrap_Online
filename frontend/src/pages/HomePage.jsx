@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom'
 import Navbar from '../components/common/Navbar'
 import Footer from '../components/common/Footer'
 import PolaroidLineCarousel from '../components/ui/PolaroidLineCarousel'
+import { Marquee } from '../components/ui/Marquee'
 import {
   ShieldCheck, TrendingUp, Leaf, ArrowRight, ChevronRight,
   Factory, Zap, Package, Scale, FileCheck, Clock,
   Award, Users, BarChart3, Globe, CheckCircle2,
-  Recycle, Truck, CreditCard, Bell, Star, Play
+  Recycle, Truck, CreditCard, Bell, Star, Play,
+  BadgeCheck, IndianRupee, Weight, Building2
 } from 'lucide-react'
 import './HomePage.css'
 
@@ -17,6 +19,18 @@ const STATS = [
   { value: '200+', label: 'Verified Buyers' },
   { value: '10K+', label: 'Tonnes Traded' },
   { value: '₹50Cr+', label: 'Trade Volume' },
+]
+
+/* Marquee items — richer version of STATS with icons, shown in the scrolling ticker */
+const STATS_MARQUEE = [
+  { icon: <BadgeCheck size={18} />,   value: '500+',    label: 'Verified Sellers' },
+  { icon: <Users size={18} />,        value: '200+',    label: 'Verified Buyers' },
+  { icon: <Weight size={18} />,       value: '10,000+', label: 'Tonnes Traded' },
+  { icon: <IndianRupee size={18} />,  value: '₹50 Cr+', label: 'Trade Volume' },
+  { icon: <ShieldCheck size={18} />,  value: '100%',    label: 'KYC Verified Network' },
+  { icon: <Recycle size={18} />,      value: '8',       label: 'Material Categories' },
+  { icon: <Building2 size={18} />,    value: 'Pan-India', label: 'Coverage' },
+  { icon: <Leaf size={18} />,         value: 'Zero',    label: 'Middlemen' },
 ]
 
 const WHY_CARDS = [
@@ -234,21 +248,18 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── STATS TICKER ─── */}
+      {/* ─── STATS MARQUEE ─── */}
       <section className="stats-bar">
-        <div className="container stats-bar-inner">
-          {STATS.map((s, i) => (
-            <div key={i} className="stats-bar-item">
-              <div className="stats-bar-value">{s.value}</div>
-              <div className="stats-bar-label">{s.label}</div>
-              {i < STATS.length - 1 && <div className="stats-bar-divider" />}
+        <Marquee speed={28} pauseOnHover gap="0px">
+          {STATS_MARQUEE.map((item, i) => (
+            <div key={i} className="stats-marquee-item">
+              <span className="stats-marquee-icon">{item.icon}</span>
+              <span className="stats-marquee-value">{item.value}</span>
+              <span className="stats-marquee-label">{item.label}</span>
+              <span className="stats-marquee-sep" aria-hidden="true">✦</span>
             </div>
           ))}
-          <div className="stats-bar-message">
-            <Leaf size={16} />
-            Together we build a sustainable future.
-          </div>
-        </div>
+        </Marquee>
       </section>
 
       {/* ─── OUR PROMISE ─── */}
