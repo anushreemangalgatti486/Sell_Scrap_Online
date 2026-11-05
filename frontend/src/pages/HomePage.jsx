@@ -56,49 +56,49 @@ const CATEGORIES = [
 /* Carousel slides — one Unsplash photo per scrap category */
 const TRADE_SLIDES = [
   {
-    image: 'https://images.unsplash.com/photo-1581093458791-9f3c3250a8b0?q=80&w=1800&auto=format&fit=crop',
+    image: 'https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?q=80&w=1800&auto=format&fit=crop',
     title: 'Iron & Steel',
     caption: 'HMS, MS scrap, CI casting, steel turnings',
     alt: 'Iron and steel scrap',
   },
   {
-    image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?q=80&w=1800&auto=format&fit=crop',
+    image: 'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?q=80&w=1800&auto=format&fit=crop',
     title: 'Copper',
     caption: 'Wire, pipe, cable, bus bar, radiator',
     alt: 'Copper scrap wire',
   },
   {
-    image: 'https://images.unsplash.com/photo-1587293852726-70cdb56c2866?q=80&w=1800&auto=format&fit=crop',
+    image: 'https://images.unsplash.com/photo-1567789884554-0b844b597180?q=80&w=1800&auto=format&fit=crop',
     title: 'Aluminium',
     caption: 'Cast, wrought, extrusion, UBC cans',
     alt: 'Aluminium scrap',
   },
   {
-    image: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1800&auto=format&fit=crop',
+    image: 'https://images.unsplash.com/photo-1530587191325-3db32d826c18?q=80&w=1800&auto=format&fit=crop',
     title: 'Paper & Cardboard',
     caption: 'OCC, newsprint, mixed paper, white',
     alt: 'Paper recycling',
   },
   {
-    image: 'https://images.unsplash.com/photo-1605600659908-0ef719419d41?q=80&w=1800&auto=format&fit=crop',
+    image: 'https://images.unsplash.com/photo-1604187351574-c75ca79f5807?q=80&w=1800&auto=format&fit=crop',
     title: 'Plastic',
     caption: 'HDPE, LDPE, PET, PP, PVC',
     alt: 'Plastic scrap recycling',
   },
   {
-    image: 'https://images.unsplash.com/photo-1542621334-a254cf47733d?q=80&w=1800&auto=format&fit=crop',
+    image: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?q=80&w=1800&auto=format&fit=crop',
     title: 'Wood & Timber',
     caption: 'Pallet wood, timber offcuts, sawdust',
     alt: 'Wood scrap pallet',
   },
   {
-    image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=1800&auto=format&fit=crop',
+    image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=1800&auto=format&fit=crop',
     title: 'E-Waste',
     caption: 'PCB, computers, cables, batteries',
     alt: 'Electronic waste',
   },
   {
-    image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=1800&auto=format&fit=crop',
+    image: 'https://images.unsplash.com/photo-1565043666747-69f6646db940?q=80&w=1800&auto=format&fit=crop',
     title: 'Industrial Mixed',
     caption: 'Rubber, glass, chemicals, mixed lots',
     alt: 'Industrial scrap',
