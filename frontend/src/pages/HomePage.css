@@ -715,3 +715,49 @@
   .stats-bar-item { flex: 0 0 auto; }
   .stats-bar-divider { display: none; }
 }
+
+/* ─── CATEGORIES CAROUSEL ─── */
+.categories-section { background: var(--bg-secondary); }
+[data-theme="dark"] .categories-section { background: var(--bg-secondary); }
+
+.categories-carousel {
+  margin-top: 0;
+  /* string colour inherits --brand-primary via prop */
+}
+
+/* Override polaroid root colours to match site theme */
+.categories-carousel .pl-print {
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg), 0 18px 30px -16px rgba(0,0,0,.35);
+}
+
+.categories-carousel .pl-note {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+/* Slot placeholder colours — green-tinted to match brand */
+.categories-carousel .pl-shot-placeholder {
+  background: linear-gradient(135deg, var(--pl-slot-a, #1B6B3A), var(--pl-slot-b, #2a9d5c));
+}
+
+.categories-carousel .pl-btn {
+  border-color: var(--border-medium);
+}
+
+.categories-cta {
+  display: flex;
+  justify-content: center;
+  margin-top: 32px;
+}
+
+@media (max-width: 768px) {
+  .categories-carousel {
+    height: 420px !important;
+  }
+}
+@media (max-width: 480px) {
+  .categories-carousel {
+    height: 360px !important;
+  }
+}

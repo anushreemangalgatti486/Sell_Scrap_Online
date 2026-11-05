@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/common/Navbar'
 import Footer from '../components/common/Footer'
+import PolaroidLineCarousel from '../components/ui/PolaroidLineCarousel'
 import {
   ShieldCheck, TrendingUp, Leaf, ArrowRight, ChevronRight,
   Factory, Zap, Package, Scale, FileCheck, Clock,
@@ -36,6 +37,58 @@ const CATEGORIES = [
   { icon: '🪵', name: 'Wood',           desc: 'Pallet wood, timber offcuts, sawdust', color: '#78350F' },
   { icon: '💻', name: 'E-Waste',        desc: 'PCB, computers, cables, batteries', color: '#065F46' },
   { icon: '🏭', name: 'Industrial',     desc: 'Rubber, glass, chemicals, mixed', color: '#4C1D95' },
+]
+
+/* Carousel slides — one Unsplash photo per scrap category */
+const TRADE_SLIDES = [
+  {
+    image: 'https://images.unsplash.com/photo-1581093458791-9f3c3250a8b0?q=80&w=1800&auto=format&fit=crop',
+    title: 'Iron & Steel',
+    caption: 'HMS, MS scrap, CI casting, steel turnings',
+    alt: 'Iron and steel scrap',
+  },
+  {
+    image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?q=80&w=1800&auto=format&fit=crop',
+    title: 'Copper',
+    caption: 'Wire, pipe, cable, bus bar, radiator',
+    alt: 'Copper scrap wire',
+  },
+  {
+    image: 'https://images.unsplash.com/photo-1587293852726-70cdb56c2866?q=80&w=1800&auto=format&fit=crop',
+    title: 'Aluminium',
+    caption: 'Cast, wrought, extrusion, UBC cans',
+    alt: 'Aluminium scrap',
+  },
+  {
+    image: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1800&auto=format&fit=crop',
+    title: 'Paper & Cardboard',
+    caption: 'OCC, newsprint, mixed paper, white',
+    alt: 'Paper recycling',
+  },
+  {
+    image: 'https://images.unsplash.com/photo-1605600659908-0ef719419d41?q=80&w=1800&auto=format&fit=crop',
+    title: 'Plastic',
+    caption: 'HDPE, LDPE, PET, PP, PVC',
+    alt: 'Plastic scrap recycling',
+  },
+  {
+    image: 'https://images.unsplash.com/photo-1542621334-a254cf47733d?q=80&w=1800&auto=format&fit=crop',
+    title: 'Wood & Timber',
+    caption: 'Pallet wood, timber offcuts, sawdust',
+    alt: 'Wood scrap pallet',
+  },
+  {
+    image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=1800&auto=format&fit=crop',
+    title: 'E-Waste',
+    caption: 'PCB, computers, cables, batteries',
+    alt: 'Electronic waste',
+  },
+  {
+    image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=1800&auto=format&fit=crop',
+    title: 'Industrial Mixed',
+    caption: 'Rubber, glass, chemicals, mixed lots',
+    alt: 'Industrial scrap',
+  },
 ]
 
 const HOW_SELLER = [
@@ -361,15 +414,28 @@ export default function HomePage() {
               From factory floors to office clearances — every industrial material category in one place.
             </p>
           </div>
-          <div className="categories-grid">
-            {CATEGORIES.map((c, i) => (
-              <Link key={i} to="/buyers" className="category-card scroll-reveal" style={{ '--cat-color': c.color, animationDelay: `${i * 0.06}s` }}>
-                <div className="cat-emoji">{c.icon}</div>
-                <h4>{c.name}</h4>
-                <p>{c.desc}</p>
-                <div className="cat-arrow"><ChevronRight size={16} /></div>
-              </Link>
-            ))}
+        </div>
+
+        {/* Full-width polaroid carousel */}
+        <PolaroidLineCarousel
+          slides={TRADE_SLIDES}
+          height={520}
+          cardWidth={300}
+          sag={50}
+          swing={1}
+          autoplay={4000}
+          string="var(--brand-primary)"
+          background="var(--bg-secondary)"
+          ink="var(--text-primary)"
+          ariaLabel="Scrap material categories carousel"
+          className="categories-carousel"
+        />
+
+        <div className="container">
+          <div className="categories-cta scroll-reveal">
+            <Link to="/buyers" className="btn btn-primary">
+              Explore All Materials <ArrowRight size={16} />
+            </Link>
           </div>
         </div>
       </section>
