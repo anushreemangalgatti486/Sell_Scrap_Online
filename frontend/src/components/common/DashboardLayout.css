@@ -280,3 +280,54 @@
 @media (max-width: 768px) {
   .dash-topbar { padding: 0 16px; }
 }
+
+/* ─── SKETCH TABS IN TOPBAR ─── */
+.dash-header-tabs {
+  /* sit flush inside the topbar — no extra padding */
+}
+
+/* tabs list inside topbar: no bottom border (topbar already has one) */
+.dash-header-tabs .sk-tabs-list {
+  border-bottom: none;
+  gap: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /* align vertically with topbar */
+  height: 64px;
+  align-items: flex-end;
+  padding-bottom: 0;
+}
+.dash-header-tabs .sk-tabs-list::-webkit-scrollbar { display: none; }
+
+/* individual trigger — taller to fill topbar */
+.dash-header-tabs .sk-tab-trigger {
+  padding: 10px 14px 10px;
+  font-size: 0.8125rem;
+  height: 64px;
+  align-items: center;
+  border-radius: 0;
+  gap: 6px;
+}
+.dash-header-tabs .sk-tab-trigger svg {
+  flex-shrink: 0;
+}
+
+/* underline sits at very bottom of topbar */
+.dash-header-tabs .sk-underline {
+  bottom: 0;
+}
+
+/* On mobile, show fewer tabs / scroll */
+@media (max-width: 768px) {
+  .dash-header-tabs .sk-tab-trigger {
+    padding: 8px 10px;
+    font-size: 0.75rem;
+    gap: 4px;
+  }
+  /* hide icon labels on very small screens, keep icons */
+  .dash-header-tabs .sk-tab-trigger .sk-tab-label-text {
+    display: none;
+  }
+}
