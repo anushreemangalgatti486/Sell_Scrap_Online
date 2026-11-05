@@ -4,6 +4,7 @@ import Navbar from '../components/common/Navbar'
 import Footer from '../components/common/Footer'
 import PolaroidLineCarousel from '../components/ui/PolaroidLineCarousel'
 import { Marquee } from '../components/ui/Marquee'
+import HowItWorks from '../components/ui/HowItWorks'
 import {
   ShieldCheck, TrendingUp, Leaf, ArrowRight, ChevronRight,
   Factory, Zap, Package, Scale, FileCheck, Clock,
@@ -360,59 +361,11 @@ export default function HomePage() {
             <h2 className="section-title">Sellers list. Buyers bid. Best price wins.</h2>
             <p className="section-subtitle">Pickup, weighment and payment tracked in one place.</p>
           </div>
-
-          <div className="how-columns">
-            <div className="how-col scroll-reveal">
-              <div className="how-role-badge seller-role">
-                <Factory size={18} /> Scrap Seller
-              </div>
-              <h3 className="how-col-title">List. Get Bids. Get Paid.</h3>
-              <div className="steps-list">
-                {HOW_SELLER.map((s, i) => (
-                  <div key={i} className="step-item">
-                    <div className="step-number">{s.step}</div>
-                    <div className="step-content">
-                      <h4>{s.title}</h4>
-                      <p>{s.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <Link to="/sellers" className="btn btn-secondary mt-auto">
-                Learn More for Sellers <ArrowRight size={16} />
-              </Link>
-            </div>
-
-            <div className="how-divider">
-              <div className="how-divider-line" />
-              <div className="how-divider-icon">
-                <Scale size={20} />
-              </div>
-              <div className="how-divider-line" />
-            </div>
-
-            <div className="how-col scroll-reveal">
-              <div className="how-role-badge buyer-role">
-                <Truck size={18} /> Scrap Buyer
-              </div>
-              <h3 className="how-col-title">Browse. Bid. Buy with Confidence.</h3>
-              <div className="steps-list">
-                {HOW_BUYER.map((s, i) => (
-                  <div key={i} className="step-item buyer-step">
-                    <div className="step-number buyer-num">{s.step}</div>
-                    <div className="step-content">
-                      <h4>{s.title}</h4>
-                      <p>{s.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <Link to="/buyers" className="btn btn-amber mt-auto">
-                Learn More for Buyers <ArrowRight size={16} />
-              </Link>
-            </div>
-          </div>
         </div>
+        <HowItWorks
+          sellerSteps={HOW_SELLER}
+          buyerSteps={HOW_BUYER}
+        />
       </section>
 
       {/* ─── MATERIAL CATEGORIES ─── */}
