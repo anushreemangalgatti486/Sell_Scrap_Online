@@ -17,6 +17,10 @@ const userSchema = new mongoose.Schema({
   verificationSubmitted:{ type: Boolean, default: false },
   rejectionReason:      { type: String },
 
+  // Password reset
+  passwordResetToken:   { type: String, select: false },
+  passwordResetExpires: { type: Date,   select: false },
+
   // Refs
   businessProfile: { type: mongoose.Schema.Types.ObjectId, ref: 'BusinessProfile' },
 

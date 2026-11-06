@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Gavel, Trophy, TrendingUp, Clock, ArrowRight, Package } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import api from '../../services/api'
+import { buyerAPI } from '../../services/api'
 import './BuyerComponents.css'
 
 export default function BuyerOverview({ setTitle }) {
@@ -12,7 +13,7 @@ export default function BuyerOverview({ setTitle }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.get('/buyer/stats')
+    buyerAPI.getStats()
       .then(r => setStats(r.data))
       .catch(() => setStats(null))
       .finally(() => setLoading(false))
@@ -104,7 +105,7 @@ export default function BuyerOverview({ setTitle }) {
           <Link to="/buyer/bids" className="quick-action-btn">
             <Gavel size={20} /> My Bids <ArrowRight size={16} />
           </Link>
-          <Link to="/buyer/profile" className="quick-action-btn">
+          <Link to="/buyer/won" className="quick-action-btn">
             <Trophy size={20} /> Won Auctions <ArrowRight size={16} />
           </Link>
         </div>

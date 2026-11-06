@@ -68,7 +68,18 @@ export const transactionsAPI = {
   getMine:   () => api.get('/transactions/mine'),
   getOne:    (id) => api.get(`/transactions/${id}`),
   initiate:  (id) => api.post(`/transactions/${id}/initiate`),
-  confirm:   (id) => api.post(`/transactions/${id}/confirm`),
+  confirm:   (id, data) => api.post(`/transactions/${id}/confirm`, data || {}),
+  cancel:    (id) => api.post(`/transactions/${id}/cancel`),
+}
+
+export const buyerAPI = {
+  getStats:    () => api.get('/buyer/stats'),
+  getAnalytics:() => api.get('/buyer/analytics'),
+}
+
+export const sellerAPI = {
+  getStats:    () => api.get('/seller/stats'),
+  getAnalytics:() => api.get('/seller/analytics'),
 }
 
 export const notificationsAPI = {

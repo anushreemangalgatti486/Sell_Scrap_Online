@@ -5,6 +5,7 @@ const BusinessProfile = require('../models/BusinessProfile')
 const Material        = require('../models/Material')
 const { protect, restrictTo } = require('../middleware/auth')
 const { createNotification } = require('../utils/notifications')
+const { sendVerificationApprovedEmail } = require('../utils/email')
 
 // All admin routes require admin role
 router.use(protect, restrictTo('admin'))
@@ -18,7 +19,31 @@ router.get('/stats', async (req, res) => {
       Material.countDocuments({ isActive: true }),
       Material.countDocuments({ 'auction.status': 'active' }),
     ])
-    res.json({ totalUsers, pendingVerifications, activeListings, activeAuctions })
+
+    // Platform activity — last 6 months
+    const sixMonthsAgo = new Date()
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+
+    const [recentUsers, recentMaterials] = await Promise.all([
+      User.find({ createdAt: { $gte: sixMonthsAgo } }).select('createdAt').lean(),
+      Material.find({ createdAt: { $gte: sixMonthsAgo } }).select('createdAt').lean(),
+    ])
+
+    const activityMap = {}
+    const toKey = (d) => new Date(d).toLocaleString('default', { month: 'short', year: '2-digit' })
+    recentUsers.forEach(u => {
+      const k = toKey(u.createdAt)
+      if (!activityMap[k]) activityMap[k] = { month: k, newUsers: 0, newListings: 0 }
+      activityMap[k].newUsers++
+    })
+    recentMaterials.forEach(m => {
+      const k = toKey(m.createdAt)
+      if (!activityMap[k]) activityMap[k] = { month: k, newUsers: 0, newListings: 0 }
+      activityMap[k].newListings++
+    })
+    const platformActivity = Object.values(activityMap)
+
+    res.json({ totalUsers, pendingVerifications, activeListings, activeAuctions, platformActivity })
   } catch (err) {
     res.status(500).json({ message: err.message })
   }
@@ -71,6 +96,8 @@ router.post('/verifications/:userId/approve', async (req, res) => {
       'verification',
       'Your business has been verified and approved! You can now access all marketplace features.',
     )
+    // Send approval email
+    try { await sendVerificationApprovedEmail(user.email, user.name, user.role) } catch {}
     res.json({ message: 'Business approved', user })
   } catch (err) {
     res.status(500).json({ message: err.message })

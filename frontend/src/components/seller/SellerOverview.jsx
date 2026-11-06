@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Package, Gavel, ShoppingBag, TrendingUp, Plus, ArrowRight, Clock } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts'
 import api from '../../services/api'
+import { sellerAPI } from '../../services/api'
 import '../buyer/BuyerComponents.css'
 import './SellerComponents.css'
 
@@ -12,7 +13,7 @@ export default function SellerOverview({ setTitle }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.get('/seller/stats')
+    sellerAPI.getStats()
       .then(r => setStats(r.data))
       .catch(() => setStats(null))
       .finally(() => setLoading(false))

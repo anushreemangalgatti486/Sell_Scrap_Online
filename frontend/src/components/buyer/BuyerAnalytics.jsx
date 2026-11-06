@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { BarChart3 } from 'lucide-react'
 import api from '../../services/api'
+import { buyerAPI } from '../../services/api'
 
 export default function BuyerAnalytics({ setTitle }) {
   useEffect(() => setTitle('Analytics'), [])
@@ -9,7 +10,7 @@ export default function BuyerAnalytics({ setTitle }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.get('/buyer/analytics')
+    buyerAPI.getAnalytics()
       .then(r => setData(r.data))
       .catch(() => setData(null))
       .finally(() => setLoading(false))

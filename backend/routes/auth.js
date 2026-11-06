@@ -1,7 +1,9 @@
-const express = require('express')
-const router  = express.Router()
-const User    = require('../models/User')
+const express  = require('express')
+const router   = express.Router()
+const crypto   = require('crypto')
+const User     = require('../models/User')
 const { sendTokenResponse } = require('../utils/jwt')
+const { sendPasswordResetEmail } = require('../utils/email')
 const { protect } = require('../middleware/auth')
 
 /* ── helpers ── */
@@ -22,10 +24,10 @@ router.post('/register', async (req, res) => {
     if (!['buyer', 'seller'].includes(role)) {
       return res.status(400).json({ message: 'Invalid role for registration' })
     }
-    if (!name)              return res.status(400).json({ message: 'Name is required' })
-    if (!email)             return res.status(400).json({ message: 'Email is required' })
+    if (!name)               return res.status(400).json({ message: 'Name is required' })
+    if (!email)              return res.status(400).json({ message: 'Email is required' })
     if (!isValidEmail(email)) return res.status(400).json({ message: 'Invalid email address' })
-    if (!password)          return res.status(400).json({ message: 'Password is required' })
+    if (!password)           return res.status(400).json({ message: 'Password is required' })
     if (password.length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' })
     if (password.length > 128) return res.status(400).json({ message: 'Password is too long' })
 
@@ -55,7 +57,6 @@ router.post('/login', async (req, res) => {
     }
 
     const user = await User.findOne({ email }).select('+password')
-    // Use the same message for wrong email AND wrong password to prevent enumeration
     if (!user) return res.status(401).json({ message: 'Invalid email or password' })
 
     if (role && user.role !== role) {
@@ -94,12 +95,79 @@ router.post('/forgot-password', async (req, res) => {
       return res.status(400).json({ message: 'Valid email is required' })
     }
 
-    // Always return the same message to prevent email enumeration
-    await User.findOne({ email }) // exists check (for future email sending)
+    // Always return success to prevent email enumeration
+    const user = await User.findOne({ email })
+    if (!user) {
+      return res.json({ message: 'If that email is registered, you will receive a reset link.' })
+    }
+
+    // Generate a cryptographically random reset token
+    const rawToken   = crypto.randomBytes(32).toString('hex')
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex')
+    const expires     = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+
+    user.passwordResetToken   = hashedToken
+    user.passwordResetExpires = expires
+    await user.save({ validateModifiedOnly: true })
+
+    // Build reset URL — points to the frontend reset page
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174'
+    const resetUrl    = `${frontendUrl}/auth/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`
+
+    await sendPasswordResetEmail(email, resetUrl, user.name)
+
     res.json({ message: 'If that email is registered, you will receive a reset link.' })
   } catch (err) {
     console.error('Forgot password error:', err.message)
-    res.status(500).json({ message: 'Request failed. Please try again.' })
+    // Don't leak whether the email exists
+    res.json({ message: 'If that email is registered, you will receive a reset link.' })
+  }
+})
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const rawToken   = sanitiseStr(req.body.token)
+    const email      = sanitiseStr(req.body.email).toLowerCase()
+    const password   = typeof req.body.password === 'string' ? req.body.password : ''
+
+    if (!rawToken || !email || !password) {
+      return res.status(400).json({ message: 'Token, email and new password are required' })
+    }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ message: 'Invalid email address' })
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters' })
+    }
+    if (password.length > 128) {
+      return res.status(400).json({ message: 'Password is too long' })
+    }
+
+    // Hash the incoming token and look it up
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex')
+
+    const user = await User.findOne({
+      email,
+      passwordResetToken:   hashedToken,
+      passwordResetExpires: { $gt: new Date() }, // not expired
+    }).select('+passwordResetToken +passwordResetExpires +password')
+
+    if (!user) {
+      return res.status(400).json({ message: 'Reset link is invalid or has expired. Please request a new one.' })
+    }
+
+    // Update password and clear reset fields
+    user.password             = password
+    user.passwordResetToken   = undefined
+    user.passwordResetExpires = undefined
+    await user.save()
+
+    // Issue a fresh JWT so the user is logged in immediately
+    sendTokenResponse(user, 200, res)
+  } catch (err) {
+    console.error('Reset password error:', err.message)
+    res.status(500).json({ message: 'Password reset failed. Please try again.' })
   }
 })
 

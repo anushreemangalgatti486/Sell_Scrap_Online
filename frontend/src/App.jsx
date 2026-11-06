@@ -14,6 +14,7 @@ const LoginPage       = lazy(() => import('./pages/auth/LoginPage'))
 const RegisterPage    = lazy(() => import('./pages/auth/RegisterPage'))
 const VerifyPage      = lazy(() => import('./pages/auth/VerifyPage'))
 const ForgotPassword  = lazy(() => import('./pages/auth/ForgotPasswordPage'))
+const ResetPassword   = lazy(() => import('./pages/auth/ResetPasswordPage'))
 const MaterialDetail  = lazy(() => import('./pages/MaterialDetailPage'))
 
 // Buyer pages
@@ -55,6 +56,7 @@ export default function App() {
               <Route path="/auth/register"        element={<RegisterPage />} />
               <Route path="/auth/verify"          element={<VerifyPage />} />
               <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+              <Route path="/auth/reset-password"  element={<ResetPassword />} />
               <Route path="/materials/:id"        element={<MaterialDetail />} />
 
               {/* Buyer (protected) */}
