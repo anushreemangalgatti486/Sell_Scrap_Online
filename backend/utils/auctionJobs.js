@@ -39,7 +39,7 @@ exports.closeExpiredAuctions = async () => {
       await Bid.updateMany({ material: material._id, _id: { $ne: winningBid._id } }, { status: 'lost' })
       await Bid.findByIdAndUpdate(winningBid._id, { status: 'won' })
 
-      // Create transaction
+      // Create transaction (amounts in paise — bidAmount is per-unit in paise, totalAmount = bidAmount * quantity)
       const totalAmount = winningBid.amount * material.quantity
       await Transaction.create({
         material:   material._id,
@@ -50,7 +50,9 @@ exports.closeExpiredAuctions = async () => {
         quantity:   material.quantity,
         unit:       material.unit,
         totalAmount,
-        paymentStatus: 'pending',
+        paymentStatus: 'advance_pending',
+        advanceStatus: 'pending',
+        advancePercentage: 10, // default; admin can change via settings
       })
 
       // Notify winner

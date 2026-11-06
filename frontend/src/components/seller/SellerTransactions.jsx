@@ -1,30 +1,49 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { CreditCard, CheckCircle2, TruckIcon, Clock, XCircle } from 'lucide-react'
-import { transactionsAPI } from '../../services/api'
+import { CreditCard, CheckCircle2, Scale, Clock, XCircle } from 'lucide-react'
+import { transactionsAPI, paymentAPI } from '../../services/api'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 
 const STATUS_BADGE = {
-  pending:    'badge-amber',
-  initiated:  'badge-blue',
-  successful: 'badge-green',
-  failed:     'badge-red',
-  refunded:   'badge-amber',
+  advance_pending:  'badge-amber',
+  advance_paid:     'badge-blue',
+  pickup_initiated: 'badge-blue',
+  balance_pending:  'badge-amber',
+  completed:        'badge-green',
+  payment_failed:   'badge-red',
+  cancelled:        'badge-gray',
+  // Legacy
+  pending:          'badge-amber',
+  initiated:        'badge-blue',
+  successful:       'badge-green',
+  failed:           'badge-red',
 }
 const STATUS_LABEL = {
-  pending:    'Pending',
-  initiated:  'In Progress',
-  successful: 'Completed',
-  failed:     'Cancelled',
-  refunded:   'Refunded',
+  advance_pending:  'Advance Due',
+  advance_paid:     'Advance Paid',
+  pickup_initiated: 'Pickup',
+  balance_pending:  'Balance Due',
+  completed:        'Completed',
+  payment_failed:   'Payment Failed',
+  cancelled:        'Cancelled',
+  pending:          'Pending',
+  initiated:        'In Progress',
+  successful:       'Completed',
+  failed:           'Cancelled',
+}
+
+function fmtPaise(p) {
+  if (!p && p !== 0) return '—'
+  return `₹${(p / 100).toLocaleString('en-IN')}`
 }
 
 export default function SellerTransactions({ setTitle }) {
   useEffect(() => setTitle('Transactions'), [])
-  const [txns,     setTxns]     = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [acting,   setActing]   = useState(null)
-  const [expanded, setExpanded] = useState(null)
+  const [txns,      setTxns]      = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [acting,    setActing]    = useState(null)
+  const [expanded, setExpanded]  = useState(null)
+  const [weighmentInput, setWeighmentInput] = useState({}) // { txId: value }
 
   const loadTxns = useCallback(() => {
     transactionsAPI.getMine()
@@ -44,12 +63,30 @@ export default function SellerTransactions({ setTitle }) {
     return () => window.removeEventListener('sb:notification', handler)
   }, [loadTxns])
 
-  const handleConfirm = async (txId) => {
-    if (!window.confirm('Confirm that pickup has been completed for this transaction?')) return
+  /* ── Record final weighment ── */
+  const handleWeighment = async (tx) => {
+    const w = weighmentInput[tx._id]
+    if (!w || isNaN(w) || +w <= 0) {
+      toast.error('Please enter a valid weighment quantity')
+      return
+    }
+    setActing(tx._id)
+    try {
+      const resp = await paymentAPI.recordWeighment(tx._id, w)
+      toast.success(`Weighment recorded. Remaining balance: ${fmtPaise(resp.data.transaction.remainingBalance)}`)
+      loadTxns()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to record weighment')
+    } finally { setActing(null) }
+  }
+
+  /* ── Confirm offline settlement ── */
+  const handleSettle = async (txId) => {
+    if (!window.confirm('Confirm that you have received the offline balance settlement?')) return
     setActing(txId)
     try {
-      await transactionsAPI.confirm(txId)
-      toast.success('Pickup confirmed!')
+      await paymentAPI.settle(txId)
+      toast.success('Settlement confirmed!')
       loadTxns()
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to confirm')
@@ -87,7 +124,7 @@ export default function SellerTransactions({ setTitle }) {
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontWeight: 700 }}>₹{tx.totalAmount?.toLocaleString() || '—'}</div>
+                  <div style={{ fontWeight: 700 }}>{fmtPaise(tx.totalAmount)}</div>
                   <span className={`badge ${STATUS_BADGE[tx.paymentStatus] || 'badge-amber'}`} style={{ marginTop: 4, display: 'inline-block' }}>
                     {STATUS_LABEL[tx.paymentStatus] || tx.paymentStatus}
                   </span>
@@ -97,24 +134,82 @@ export default function SellerTransactions({ setTitle }) {
               {/* Expanded */}
               {open && (
                 <div style={{ borderTop: '1px solid var(--border-light)', padding: '14px 20px', background: 'var(--bg-secondary)' }}>
+                  {/* Payment breakdown */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 12, marginBottom: 14 }}>
-                    <div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Bid / Unit</div><div style={{ fontWeight: 600 }}>₹{tx.bidAmount?.toLocaleString()}/{tx.unit}</div></div>
-                    <div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Quantity</div><div style={{ fontWeight: 600 }}>{tx.quantity} {tx.unit}</div></div>
-                    <div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Buyer Confirmed</div><div style={{ fontWeight: 600 }}>{tx.confirmedByBuyer ? '✅ Yes' : '⏳ Pending'}</div></div>
-                    <div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Your Confirmation</div><div style={{ fontWeight: 600 }}>{tx.confirmedBySeller ? '✅ Yes' : '⏳ Pending'}</div></div>
-                    {tx.weighment && <div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Weighment</div><div style={{ fontWeight: 600 }}>{tx.weighment} {tx.unit}</div></div>}
-                    {tx.paidAt && <div><div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Completed</div><div style={{ fontWeight: 600 }}>{format(new Date(tx.paidAt), 'dd MMM yyyy')}</div></div>}
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Est. Total</div>
+                      <div style={{ fontWeight: 600 }}>{fmtPaise(tx.totalAmount)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Advance ({tx.advancePercentage || 10}%)</div>
+                      <div style={{ fontWeight: 600, color: 'var(--brand-primary)' }}>
+                        {tx.advanceStatus === 'paid' ? '✅ ' : ''}{fmtPaise(tx.advanceAmount)}
+                      </div>
+                    </div>
+                    {tx.finalWeighment && (
+                      <>
+                        <div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Final Weighment</div>
+                          <div style={{ fontWeight: 600 }}>{tx.finalWeighment} {tx.unit}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Final Amount</div>
+                          <div style={{ fontWeight: 600 }}>{fmtPaise(tx.finalAmount)}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Balance Due</div>
+                          <div style={{ fontWeight: 700, color: 'var(--amber-600)' }}>{fmtPaise(tx.remainingBalance)}</div>
+                        </div>
+                      </>
+                    )}
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Buyer Confirmed</div>
+                      <div style={{ fontWeight: 600 }}>{tx.confirmedByBuyer ? '✅ Yes' : '⏳ Pending'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Your Confirmation</div>
+                      <div style={{ fontWeight: 600 }}>{tx.confirmedBySeller ? '✅ Yes' : '⏳ Pending'}</div>
+                    </div>
+                    {tx.completedAt && (
+                      <div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Completed</div>
+                        <div style={{ fontWeight: 600 }}>{format(new Date(tx.completedAt), 'dd MMM yyyy')}</div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Confirm pickup button */}
-                  {(tx.paymentStatus === 'initiated' || tx.paymentStatus === 'pending') && !tx.confirmedBySeller && (
+                  {/* Record weighment */}
+                  {tx.paymentStatus === 'advance_paid' && !tx.finalWeighment && (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                      <Scale size={16} style={{ color: 'var(--text-muted)' }} />
+                      <input
+                        className="form-input"
+                        type="number"
+                        placeholder={`Actual weighment (${tx.unit})`}
+                        value={weighmentInput[tx._id] || ''}
+                        onChange={e => setWeighmentInput(prev => ({ ...prev, [tx._id]: e.target.value }))}
+                        style={{ width: 200 }}
+                      />
+                      <button
+                        className="btn btn-primary btn-sm"
+                        disabled={acting === tx._id}
+                        onClick={() => handleWeighment(tx)}
+                      >
+                        {acting === tx._id ? <div className="spinner" /> : <Scale size={14} />}
+                        Record Weighment
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Confirm offline settlement */}
+                  {tx.paymentStatus === 'balance_pending' && !tx.confirmedBySeller && (
                     <button
-                      className="btn btn-primary btn-sm"
+                      className="btn btn-secondary btn-sm"
                       disabled={acting === tx._id}
-                      onClick={() => handleConfirm(tx._id)}
+                      onClick={() => handleSettle(tx._id)}
                     >
                       {acting === tx._id ? <div className="spinner" /> : <CheckCircle2 size={14} />}
-                      Confirm Pickup
+                      Confirm Settlement Received
                     </button>
                   )}
                 </div>

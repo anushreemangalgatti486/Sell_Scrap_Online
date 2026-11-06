@@ -235,4 +235,48 @@ router.post('/users/:userId/suspend', async (req, res) => {
   }
 })
 
+// GET /api/admin/settings — get platform settings (advance percentage etc.)
+router.get('/settings', async (req, res) => {
+  try {
+    const Setting = require('../models/Setting')
+    const settings = await Setting.find().lean()
+    const result = {}
+    settings.forEach(s => { result[s.key] = s.value })
+    // Defaults
+    if (!result.advancePercentage) result.advancePercentage = 10
+    res.json({ settings: result })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// PUT /api/admin/settings — update platform settings (advance percentage etc.)
+router.put('/settings', async (req, res) => {
+  try {
+    const Setting = require('../models/Setting')
+    const { advancePercentage } = req.body
+
+    if (advancePercentage !== undefined) {
+      const pct = +advancePercentage
+      if (isNaN(pct) || pct < 1 || pct > 100) {
+        return res.status(400).json({ message: 'Advance percentage must be between 1 and 100' })
+      }
+      await Setting.findOneAndUpdate(
+        { key: 'advancePercentage' },
+        { value: pct, updatedBy: req.user._id },
+        { upsert: true, new: true }
+      )
+    }
+
+    // Return updated settings
+    const settings = await Setting.find().lean()
+    const result = {}
+    settings.forEach(s => { result[s.key] = s.value })
+    if (!result.advancePercentage) result.advancePercentage = 10
+    res.json({ settings: result })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
 module.exports = router

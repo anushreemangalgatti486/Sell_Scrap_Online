@@ -23,6 +23,7 @@ router.get('/mine', protect, async (req, res) => {
       .populate('material', 'name category images unit')
       .populate('buyer',    'name businessName email')
       .populate('seller',   'name businessName email')
+      .select('-razorpaySignature') // never expose signature
       .lean()
     res.json({ transactions: txns })
   } catch (err) {
@@ -38,6 +39,7 @@ router.get('/:id', protect, async (req, res) => {
       .populate('buyer',    'name businessName email phone')
       .populate('seller',   'name businessName email phone')
       .populate('winningBid')
+      .select('-razorpaySignature')
     if (!tx) return res.status(404).json({ message: 'Transaction not found' })
     if (!canAccess(tx, req.user)) {
       return res.status(403).json({ message: 'Not authorized' })
@@ -49,7 +51,7 @@ router.get('/:id', protect, async (req, res) => {
 })
 
 // POST /api/transactions/:id/initiate
-// Buyer initiates the payment process (marks as 'initiated')
+// Buyer initiates the transaction — marks as ready for advance payment
 router.post('/:id/initiate', protect, async (req, res) => {
   try {
     const tx = await Transaction.findById(req.params.id)
@@ -59,18 +61,25 @@ router.post('/:id/initiate', protect, async (req, res) => {
     if (!tx.buyer.equals(req.user._id)) {
       return res.status(403).json({ message: 'Only the buyer can initiate payment' })
     }
-    if (tx.paymentStatus !== 'pending') {
+
+    // Allow initiation from advance_pending or payment_failed (retry)
+    if (!['advance_pending', 'payment_failed'].includes(tx.paymentStatus)) {
       return res.status(400).json({ message: `Transaction is already ${tx.paymentStatus}` })
     }
 
-    tx.paymentStatus = 'initiated'
+    // If payment had failed before, reset to allow retry
+    if (tx.paymentStatus === 'payment_failed') {
+      tx.paymentStatus  = 'advance_pending'
+      tx.advanceStatus  = 'pending'
+    }
+
     await tx.save()
 
     // Notify seller
     await createNotification(
       tx.seller._id,
       'payment',
-      `Buyer has initiated payment for ${tx.material?.name}. Please coordinate pickup.`,
+      `Buyer has initiated the transaction for ${tx.material?.name}. Advance payment pending.`,
       { transactionId: tx._id }
     )
 
@@ -81,8 +90,8 @@ router.post('/:id/initiate', protect, async (req, res) => {
 })
 
 // POST /api/transactions/:id/confirm
-// Dual-confirmation: buyer confirms receipt, seller confirms pickup.
-// When both confirm → status becomes 'successful'.
+// Legacy confirm — now delegates to settlement confirmation
+// Kept for backward compatibility with existing frontend components
 router.post('/:id/confirm', protect, async (req, res) => {
   try {
     const tx = await Transaction.findById(req.params.id)
@@ -93,53 +102,47 @@ router.post('/:id/confirm', protect, async (req, res) => {
     if (!canAccess(tx, req.user)) {
       return res.status(403).json({ message: 'Not authorized' })
     }
-    if (tx.paymentStatus === 'successful') {
+    if (tx.paymentStatus === 'completed') {
       return res.status(400).json({ message: 'Transaction already completed' })
     }
 
+    // Record weighment if provided (seller can do this)
+    if (req.body.weighment && !isNaN(req.body.weighment) && +req.body.weighment > 0) {
+      if (req.user.role !== 'admin' && !tx.seller._id.equals(req.user._id)) {
+        return res.status(403).json({ message: 'Only the seller can record weighment' })
+      }
+      tx.finalWeighment = +req.body.weighment
+      tx.finalAmount     = tx.bidAmount * tx.finalWeighment
+      tx.remainingBalance = Math.max(0, tx.finalAmount - tx.advanceAmount)
+      if (tx.paymentStatus === 'advance_paid') tx.paymentStatus = 'balance_pending'
+      tx.pickupStatus = 'completed'
+    }
+
+    // Settlement confirmation
     if (req.user.role === 'buyer'  && tx.buyer._id.equals(req.user._id))  tx.confirmedByBuyer  = true
     if (req.user.role === 'seller' && tx.seller._id.equals(req.user._id)) tx.confirmedBySeller = true
 
-    // Optional: record weighment supplied by either party
-    if (req.body.weighment && !isNaN(req.body.weighment)) {
-      tx.weighment = +req.body.weighment
-    }
-    if (req.body.pickupDate) {
-      tx.pickupDate    = new Date(req.body.pickupDate)
-      tx.pickupStatus  = 'scheduled'
-    }
+    // Both confirmed → complete (only after balance_pending)
+    if (tx.confirmedByBuyer && tx.confirmedBySeller && tx.paymentStatus === 'balance_pending') {
+      tx.paymentStatus    = 'completed'
+      tx.settlementStatus = 'settled'
+      tx.completedAt      = new Date()
+      tx.paidAt            = new Date()
 
-    // Both confirmed → complete
-    if (tx.confirmedByBuyer && tx.confirmedBySeller) {
-      tx.paymentStatus = 'successful'
-      tx.pickupStatus  = 'completed'
-      tx.paidAt        = new Date()
-
-      // Notify both parties
-      await createNotification(
-        tx.buyer._id,
-        'payment',
-        `Transaction for ${tx.material?.name} has been completed successfully.`,
-        { transactionId: tx._id }
-      )
-      await createNotification(
-        tx.seller._id,
-        'payment',
-        `Transaction for ${tx.material?.name} has been completed. Payment confirmed.`,
-        { transactionId: tx._id }
-      )
-    } else {
-      // Partial — notify the other party
+      await createNotification(tx.buyer._id, 'payment',
+        `Transaction for ${tx.material?.name} completed successfully.`,
+        { transactionId: tx._id })
+      await createNotification(tx.seller._id, 'payment',
+        `Transaction for ${tx.material?.name} completed. All settlements confirmed.`,
+        { transactionId: tx._id })
+    } else if (tx.confirmedByBuyer || tx.confirmedBySeller) {
       const otherParty = req.user.role === 'buyer' ? tx.seller._id : tx.buyer._id
-      const confirmerName = req.user.role === 'buyer'
+      const confirmer  = req.user.role === 'buyer'
         ? tx.buyer?.businessName || 'Buyer'
         : tx.seller?.businessName || 'Seller'
-      await createNotification(
-        otherParty,
-        'transaction',
-        `${confirmerName} has confirmed pickup for ${tx.material?.name}. Please confirm your side to complete.`,
-        { transactionId: tx._id }
-      )
+      await createNotification(otherParty, 'transaction',
+        `${confirmer} has confirmed for ${tx.material?.name}. Please confirm your side.`,
+        { transactionId: tx._id })
     }
 
     await tx.save()
@@ -149,23 +152,39 @@ router.post('/:id/confirm', protect, async (req, res) => {
   }
 })
 
-// POST /api/transactions/:id/cancel (admin or buyer before payment)
+// POST /api/transactions/:id/cancel (admin or buyer before advance payment)
 router.post('/:id/cancel', protect, async (req, res) => {
   try {
     const tx = await Transaction.findById(req.params.id)
       .populate('material', 'name')
     if (!tx) return res.status(404).json({ message: 'Transaction not found' })
 
-    // Only admin or the buyer can cancel, and only while pending/initiated
+    // Only admin or the buyer can cancel
+    // After advance is paid, only admin can cancel (requires refund handling)
     const canCancel =
       req.user.role === 'admin' ||
-      (tx.buyer.equals(req.user._id) && ['pending', 'initiated'].includes(tx.paymentStatus))
+      (tx.buyer.equals(req.user._id) && tx.paymentStatus === 'advance_pending')
 
     if (!canCancel) {
-      return res.status(403).json({ message: 'Cannot cancel this transaction' })
+      return res.status(403).json({
+        message: tx.paymentStatus === 'advance_paid'
+          ? 'Cannot cancel after advance payment. Contact admin for refund.'
+          : 'Cannot cancel this transaction'
+      })
     }
 
-    tx.paymentStatus = 'failed'
+    // If advance was already paid, warn about refund
+    if (tx.advanceStatus === 'paid') {
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({
+          message: 'Advance payment already received. Only admin can cancel. Refund will need to be processed manually.'
+        })
+      }
+      // Admin cancelling after advance paid — flag for manual refund
+      tx.advanceStatus = 'refunded'
+    }
+
+    tx.paymentStatus = 'cancelled'
     await tx.save()
 
     await createNotification(tx.seller, 'transaction',

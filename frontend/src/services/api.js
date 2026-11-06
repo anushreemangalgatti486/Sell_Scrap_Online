@@ -72,6 +72,13 @@ export const transactionsAPI = {
   cancel:    (id) => api.post(`/transactions/${id}/cancel`),
 }
 
+export const paymentAPI = {
+  createOrder: (transactionId) => api.post('/payments/create-order', { transactionId }),
+  verify:      (data) => api.post('/payments/verify', data),
+  recordWeighment: (id, weighment) => api.post(`/payments/transactions/${id}/weighment`, { weighment }),
+  settle:      (id) => api.post(`/payments/transactions/${id}/settle`),
+}
+
 export const buyerAPI = {
   getStats:    () => api.get('/buyer/stats'),
   getAnalytics:() => api.get('/buyer/analytics'),
@@ -100,6 +107,8 @@ export const adminAPI = {
   getTransactions: ()       => api.get('/admin/transactions'),
   getAuctions:     (params) => api.get('/admin/auctions', { params }),
   closeAuction:    (id)     => api.post(`/admin/auctions/${id}/close`),
+  getSettings:    ()       => api.get('/admin/settings'),
+  updateSettings: (data)   => api.put('/admin/settings', data),
 }
 
 export const businessAPI = {
