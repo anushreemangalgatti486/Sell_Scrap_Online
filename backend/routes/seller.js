@@ -82,8 +82,15 @@ router.post('/materials', uploadMaterialImages, async (req, res) => {
     const images = (req.files || []).map(f => getFileUrl(f)).filter(Boolean)
 
     const now = new Date()
-    const startTime = auctionStartDate ? new Date(auctionStartDate) : null
-    const endTime   = auctionEndDate   ? new Date(auctionEndDate)   : null
+    // Treat naive datetime strings (from datetime-local inputs) as UTC
+    // by appending 'Z' if no timezone is present
+    const toUTC = (s) => {
+      if (!s) return null
+      if (/Z$|[+-]\d{2}:\d{2}$/.test(s)) return new Date(s)
+      return new Date(s + ':00Z')
+    }
+    const startTime = toUTC(auctionStartDate)
+    const endTime   = toUTC(auctionEndDate)
     let auctionStatus = 'draft'
     if (startTime && endTime) {
       auctionStatus = startTime <= now ? 'active' : 'scheduled'

@@ -28,7 +28,7 @@ exports.initSocket = (httpServer) => {
     process.env.EXTRA_ORIGINS.split(',').map(o => o.trim()).filter(Boolean).forEach(o => allowedOrigins.push(o))
   }
   if (process.env.NODE_ENV !== 'production') {
-    allowedOrigins.push('http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000')
+    allowedOrigins.push('http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000')
   }
 
   _io = new Server(httpServer, {

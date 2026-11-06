@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { Zap, Clock, Package } from 'lucide-react'
+import { Zap, Clock, Package, RefreshCw } from 'lucide-react'
 import { io } from 'socket.io-client'
 import { materialsAPI } from '../../services/api'
 import { formatDistanceToNow } from 'date-fns'
@@ -12,29 +12,42 @@ const SOCKET_URL = import.meta.env.VITE_API_URL
 
 export default function BuyerLiveAuctions({ setTitle }) {
   useEffect(() => setTitle('Live Auctions'), [])
-  const [items,   setItems]   = useState([])
-  const [loading, setLoading] = useState(true)
+  const [items,     setItems]     = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [connected, setConnected] = useState(false)
   const socketRef = useRef(null)
   const roomsRef  = useRef(new Set())
 
-  // Fetch active auctions on mount
-  useEffect(() => {
+  const fetchAuctions = useCallback(() => {
+    setLoading(true)
     materialsAPI.getAll({ status: 'active', sort: 'ending_soon', limit: 50 })
       .then(r => setItems(r.data.materials || []))
       .catch(() => setItems([]))
       .finally(() => setLoading(false))
   }, [])
 
-  // Create ONE socket and join a room for each active auction
+  // Fetch on mount
+  useEffect(() => { fetchAuctions() }, [fetchAuctions])
+
+  // Create socket once and keep it alive
   useEffect(() => {
     const token = localStorage.getItem('sb_token')
-
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
       auth: token ? { token } : {},
     })
     socketRef.current = socket
+
+    socket.on('connect', () => {
+      setConnected(true)
+      // Re-join all rooms after reconnect
+      roomsRef.current.forEach(id => socket.emit('join:auction', id))
+    })
+
+    socket.on('disconnect', () => setConnected(false))
 
     socket.on('bid:new', (data) => {
       const mid = data.materialId?.toString()
@@ -49,36 +62,49 @@ export default function BuyerLiveAuctions({ setTitle }) {
     socket.on('auction:closed', (data) => {
       const mid = data.materialId?.toString()
       if (!mid) return
-      // Remove the closed auction from the live list
       setItems(prev => prev.filter(m => m._id !== mid))
       roomsRef.current.delete(mid)
     })
 
     return () => {
       socket.disconnect()
+      socketRef.current = null
       roomsRef.current.clear()
     }
   }, [])
 
-  // Whenever `items` changes, join any rooms we haven't joined yet
+  // Join new rooms whenever items list changes
   useEffect(() => {
     const socket = socketRef.current
-    if (!socket) return
+    if (!socket?.connected) return
     items.forEach(m => {
       if (!roomsRef.current.has(m._id)) {
         socket.emit('join:auction', m._id)
         roomsRef.current.add(m._id)
       }
     })
-  }, [items])
+  }, [items, connected])  // re-run when connection restores
 
   return (
     <div>
-      <div className="section-header" style={{ textAlign: 'left', marginBottom: 20 }}>
-        <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Zap size={22} style={{ color: 'var(--amber-500)' }} /> Live Auctions
-        </h2>
-        <p>Active auctions ending soonest. Place your bid before they close.</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Zap size={22} style={{ color: 'var(--amber-500)' }} /> Live Auctions
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginTop: 4 }}>
+            Active auctions ending soonest. Place your bid before they close.
+          </p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: '0.75rem', color: connected ? 'var(--brand-primary)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: connected ? 'var(--brand-primary)' : 'var(--text-muted)', display: 'inline-block' }} />
+            {connected ? 'Live' : 'Connecting...'}
+          </span>
+          <button className="btn btn-ghost btn-sm" onClick={fetchAuctions} title="Refresh">
+            <RefreshCw size={14} />
+          </button>
+        </div>
       </div>
 
       {loading ? (

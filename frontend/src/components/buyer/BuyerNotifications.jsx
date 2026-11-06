@@ -23,11 +23,15 @@ export default function BuyerNotifications({ setTitle }) {
   }, [])
 
   // Prepend new notifications that arrive via socket while this page is open
+  // Deduplicate by _id to prevent duplicates on reconnect
   useEffect(() => {
     const handler = (event) => {
-      if (event.detail) {
-        setNotifications(prev => [event.detail, ...prev])
-      }
+      if (!event.detail) return
+      setNotifications(prev => {
+        const exists = prev.some(n => n._id?.toString() === event.detail._id?.toString())
+        if (exists) return prev
+        return [event.detail, ...prev]
+      })
     }
     window.addEventListener('sb:notification', handler)
     return () => window.removeEventListener('sb:notification', handler)

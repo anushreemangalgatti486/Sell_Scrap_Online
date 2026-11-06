@@ -16,10 +16,19 @@ router.post('/:materialId', protect, restrictTo('buyer'), requireVerified, async
 
     const material = await Material.findById(req.params.materialId).select('+minAcceptablePrice')
     if (!material) return res.status(404).json({ message: 'Material not found' })
+
+    const now = new Date()
+
+    // Auto-activate if start time has passed but status is still 'scheduled'
+    if (material.auction?.status === 'scheduled' && material.auction.startTime && material.auction.startTime <= now) {
+      material.auction.status = 'active'
+      await material.save()
+    }
+
     if (material.auction?.status !== 'active') {
       return res.status(400).json({ message: 'This auction is not currently active' })
     }
-    if (new Date() > new Date(material.auction.endTime)) {
+    if (material.auction.endTime && now > new Date(material.auction.endTime)) {
       return res.status(400).json({ message: 'Auction has ended' })
     }
 

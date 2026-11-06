@@ -54,6 +54,7 @@ const buildAllowedOrigins = () => {
   if (process.env.NODE_ENV !== 'production') {
     origins.add('http://localhost:5173')
     origins.add('http://localhost:5174')
+    origins.add('http://localhost:5175')
     origins.add('http://localhost:3000')
   }
 
@@ -81,10 +82,11 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 // Global rate limit — 300 requests per 15 minutes per IP
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false }))
 
-// Stricter rate limit on auth routes — 20 requests per 15 minutes per IP
+// Stricter rate limit on auth routes
+// Dev: 100 req / 15 min  |  Production: 20 req / 15 min
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: process.env.NODE_ENV === 'production' ? 20 : 100,
   message: { message: 'Too many authentication attempts. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
