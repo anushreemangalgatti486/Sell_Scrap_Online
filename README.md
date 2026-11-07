@@ -4,6 +4,64 @@ A complete, production-ready B2B scrap marketplace connecting verified industria
 
 ---
 
+## Administrator Account Setup
+
+The first administrator account must be created from the server side using a CLI script.
+There is **no public registration endpoint** for admin accounts.
+
+### Prerequisites
+
+Configure these variables in `backend/.env`:
+
+| Variable | Description |
+|----------|-------------|
+| `ADMIN_EMAIL` | The email address for the admin account |
+| `ADMIN_PASSWORD` | A strong password (minimum 8 characters) |
+| `ADMIN_NAME` | Display name for the admin (optional, defaults to "ScrapBazaar Admin") |
+| `MONGODB_URI` | MongoDB connection string (local or Atlas) |
+
+### Create the First Admin
+
+From the `backend` directory:
+
+```bash
+# Uses ADMIN_EMAIL and ADMIN_PASSWORD from .env
+node scripts/create-admin.js
+
+# Override email and password via CLI
+node scripts/create-admin.js --email=you@email.com --password=YourStrongPass123!
+```
+
+The script will:
+- Check if an admin already exists (refuses to create duplicates)
+- Check if the email belongs to a buyer/seller (refuses to overwrite)
+- Hash the password with bcrypt (12 rounds) — never stored in plain text
+- Create the account with role `admin` and `verificationStatus: approved`
+
+### Promote an Existing User to Admin
+
+If you need to grant admin access to someone who already has a buyer/seller account:
+
+```bash
+node scripts/promote-admin.js --email=existing@email.com
+```
+
+This is irreversible — the user's role changes from buyer/seller to admin.
+
+### Log In After Creation
+
+1. Open the frontend in your browser
+2. Go to the Login page
+3. Select **Administrator** role
+4. Enter the admin email and password
+5. You will be redirected to the Admin Dashboard
+
+### Duplicate Admin Prevention
+
+The script checks for existing admin accounts before creating a new one. If an admin already exists, it will display the existing admin's email and exit without making changes.
+
+---
+
 ## Project Structure
 
 ```
