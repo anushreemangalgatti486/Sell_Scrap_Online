@@ -111,8 +111,12 @@ async function createAdmin() {
         process.exit(0)
       }
 
-      console.log('⚠️  A DIFFERENT admin account already exists.')
-      console.log('   This script will NOT create a second admin account.\n')
+      // Allow creating additional admin accounts with --force flag
+      const hasForceFlag = process.argv.includes('--force')
+      if (!hasForceFlag) {
+        console.log('⚠️  A different admin account already exists.')
+        console.log('   This script will NOT create a second admin account by default.\n')
+      }
 
       // Check if the requested email belongs to an existing buyer/seller
       const existingUser = await User.findOne({ email }).lean()
@@ -120,13 +124,18 @@ async function createAdmin() {
         console.log(`   The email "${email}" is registered as a ${existingUser.role}.`)
         console.log('   To PROMOTE this account to admin, use the explicit promotion script:')
         console.log('   node scripts/promote-admin.js --email=' + email + '\n')
-      } else {
-        console.log(`   The email "${email}" is not yet registered.`)
-        console.log('   To create a new admin with this email, first remove the existing admin:')
-        console.log('   (Use MongoDB Compass or mongo shell to delete or demote the current admin)\n')
+        process.exit(0)
       }
 
-      process.exit(0)
+      if (!hasForceFlag) {
+        console.log(`   The email "${email}" is not yet registered.`)
+        console.log('   To create an additional admin account, use --force:')
+        console.log('   node scripts/create-admin.js --email=' + email + ' --password=StrongPass123! --force\n')
+        process.exit(0)
+      }
+
+      // --force: create additional admin (existing admin is left untouched)
+      console.log('   ⚠️  --force flag detected. Creating an ADDITIONAL admin account.\n')
     }
 
     // ── Step 2: Check if the email is already used by a buyer/seller ──
