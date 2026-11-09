@@ -81,7 +81,12 @@ export default function SellerAddMaterial({ setTitle }) {
       const fd = new FormData()
       // Text fields
       Object.entries(form).forEach(([k, v]) => {
-        if (k !== 'images') fd.append(k, v)
+        if (k === 'images') return
+        if ((k === 'auctionStartDate' || k === 'auctionEndDate') && v) {
+          fd.append(k, new Date(v).toISOString())
+        } else {
+          fd.append(k, v)
+        }
       })
       // Images
       form.images.forEach(img => fd.append('images', img))

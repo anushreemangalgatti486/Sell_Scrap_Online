@@ -3,6 +3,8 @@ const Bid          = require('../models/Bid')
 const Transaction  = require('../models/Transaction')
 const { createNotification } = require('./notifications')
 const { emitAuctionClosed } = require('./socket')
+const { syncAuctionClosedToFirestore, syncStatsToFirestore } = require('./firebase')
+const User = require('../models/User')
 
 exports.closeExpiredAuctions = async () => {
   const now = new Date()
@@ -92,6 +94,13 @@ exports.closeExpiredAuctions = async () => {
         status:       'closed',
         winningBid:   winningBid.amount,
         closedAt:     now,
+      })
+
+      // Sync auction closed to Cloud Firestore
+      syncAuctionClosedToFirestore(material._id, {
+        winningBid: winningBid.amount,
+        winner: winningBid.bidder._id,
+        closedAt: now.toISOString(),
       })
 
     } catch (err) {

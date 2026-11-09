@@ -5,6 +5,8 @@ import React, {
 import { io } from 'socket.io-client'
 import api from '../services/api'
 import toast from 'react-hot-toast'
+import { db, isFirebaseConfigured } from '../services/firebase'
+import { doc, onSnapshot } from 'firebase/firestore'
 
 const AuthContext = createContext()
 
@@ -133,6 +135,29 @@ export function AuthProvider({ children }) {
     setUnreadCount(0)
     toast.success('Logged out successfully')
   }, [])
+
+  // Real-time Firestore listener on user document to immediately catch account suspension
+  useEffect(() => {
+    if (!user?._id || !isFirebaseConfigured || !db) return
+    let unsubscribe = null
+    try {
+      const userRef = doc(db, 'users', user._id)
+      unsubscribe = onSnapshot(userRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data()
+          if (data.isActive === false) {
+            toast.error('Your account has been suspended by an administrator.', { duration: 6000 })
+            logout()
+          }
+        }
+      }, (err) => {
+        console.warn('Firestore user listener error:', err.message)
+      })
+    } catch (err) {
+      console.warn('Failed to attach Firestore user listener:', err.message)
+    }
+    return () => { if (unsubscribe) unsubscribe() }
+  }, [user?._id, logout])
 
   const updateUser = useCallback((updates) => {
     setUser(prev => ({ ...prev, ...updates }))

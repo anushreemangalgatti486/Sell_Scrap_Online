@@ -5,6 +5,7 @@ const Material = require('../models/Material')
 const { protect, restrictTo, requireVerified } = require('../middleware/auth')
 const { createNotification } = require('../utils/notifications')
 const { emitBidUpdate } = require('../utils/socket')
+const { syncBidToFirestore } = require('../utils/firebase')
 
 // POST /api/bids/:materialId — place a bid
 router.post('/:materialId', protect, restrictTo('buyer'), requireVerified, async (req, res) => {
@@ -100,6 +101,14 @@ router.post('/:materialId', protect, restrictTo('buyer'), requireVerified, async
       bidsCount:         material.bidsCount,
       anonymousLabel:    bid.anonymousLabel,
       amount:            bid.amount,
+      createdAt:         bid.createdAt,
+    })
+
+    // Also sync to Cloud Firestore for real-time listeners
+    syncBidToFirestore(material._id, {
+      amount:            bid.amount,
+      bidsCount:         material.bidsCount,
+      anonymousLabel:    bid.anonymousLabel,
       createdAt:         bid.createdAt,
     })
 

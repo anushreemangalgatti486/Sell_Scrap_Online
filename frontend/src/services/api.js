@@ -44,12 +44,14 @@ export const authAPI = {
 }
 
 export const materialsAPI = {
-  getAll:   (params) => api.get('/materials', { params }),
-  getOne:   (id)     => api.get(`/materials/${id}`),
-  create:   (data)   => api.post('/materials', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  update:   (id, d)  => api.put(`/materials/${id}`, d),
-  delete:   (id)     => api.delete(`/materials/${id}`),
-  getMine:  (params) => api.get('/materials/mine', { params }),
+  getAll:    (params) => api.get('/materials', { params }),
+  getOne:    (id)     => api.get(`/materials/${id}`),
+  create:    (data)   => api.post('/materials', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  update:    (id, d)  => api.put(`/materials/${id}`, d),
+  delete:    (id)     => api.delete(`/materials/${id}`),
+  getMine:   (params) => api.get('/materials/mine', { params }),
+  acceptBid: (id)     => api.post(`/materials/${id}/accept-bid`),
+  activate:  (id)     => api.post(`/materials/${id}/activate`),
 }
 
 export const bidsAPI = {
@@ -75,6 +77,7 @@ export const transactionsAPI = {
 export const paymentAPI = {
   createOrder: (transactionId) => api.post('/payments/create-order', { transactionId }),
   verify:      (data) => api.post('/payments/verify', data),
+  mockAdvance: (transactionId) => api.post('/payments/mock-advance', { transactionId }),
   recordWeighment: (id, weighment) => api.post(`/payments/transactions/${id}/weighment`, { weighment }),
   settle:      (id) => api.post(`/payments/transactions/${id}/settle`),
 }
@@ -98,6 +101,7 @@ export const notificationsAPI = {
 export const adminAPI = {
   getUsers:        (params) => api.get('/admin/users', { params }),
   suspendUser:     (id, active) => api.post(`/admin/users/${id}/suspend`, { active }),
+  deleteUser:      (id)     => api.delete(`/admin/users/${id}`),
   getPending:      ()       => api.get('/admin/verifications/pending'),
   approve:         (id)     => api.post(`/admin/verifications/${id}/approve`),
   reject:          (id, r)  => api.post(`/admin/verifications/${id}/reject`, { reason: r }),

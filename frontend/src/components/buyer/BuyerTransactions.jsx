@@ -71,10 +71,17 @@ export default function BuyerTransactions({ setTitle }) {
     try {
       // 1. Create order on backend
       const orderResp = await paymentAPI.createOrder(tx._id)
-      const { orderId, amount, currency, keyId } = orderResp.data
+      const { orderId, amount, currency, keyId, isMock } = orderResp.data
 
-      if (!keyId || keyId === 'rzp_test_your_key_id') {
-        toast.error('Razorpay not configured. Contact admin.')
+      if (isMock || keyId === 'mock_key' || !keyId || keyId === 'rzp_test_your_key_id') {
+        // Fallback to simulated payment in development mode
+        const sim = window.confirm(`Razorpay is in test mode. Simulate 10% advance payment of ₹${(amount / 100).toLocaleString()} for ${tx.material?.name}?`)
+        if (!sim) { setActing(null); return }
+        const mockRes = await paymentAPI.mockAdvance(tx._id)
+        if (mockRes.data.verified) {
+          toast.success('Advance payment confirmed (Test Mode)!')
+          loadTxns()
+        }
         return
       }
 

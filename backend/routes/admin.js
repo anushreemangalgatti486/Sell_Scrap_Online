@@ -6,6 +6,7 @@ const Material        = require('../models/Material')
 const { protect, restrictTo } = require('../middleware/auth')
 const { createNotification } = require('../utils/notifications')
 const { sendVerificationApprovedEmail } = require('../utils/email')
+const { syncStatsToFirestore, syncUserStatusToFirestore } = require('../utils/firebase')
 
 // All admin routes require admin role
 router.use(protect, restrictTo('admin'))
@@ -14,8 +15,8 @@ router.use(protect, restrictTo('admin'))
 router.get('/stats', async (req, res) => {
   try {
     const [totalUsers, pendingVerifications, activeListings, activeAuctions] = await Promise.all([
-      User.countDocuments({ role: { $in: ['buyer', 'seller'] } }),
-      User.countDocuments({ verificationStatus: 'pending' }),
+      User.countDocuments({ role: { $in: ['buyer', 'seller'] }, isActive: true }),
+      User.countDocuments({ verificationStatus: 'pending', isActive: true }),
       Material.countDocuments({ isActive: true }),
       Material.countDocuments({ 'auction.status': 'active' }),
     ])
@@ -42,6 +43,8 @@ router.get('/stats', async (req, res) => {
       activityMap[k].newListings++
     })
     const platformActivity = Object.values(activityMap)
+
+    syncStatsToFirestore({ totalUsers, pendingVerifications, activeListings, activeAuctions, platformActivity })
 
     res.json({ totalUsers, pendingVerifications, activeListings, activeAuctions, platformActivity })
   } catch (err) {
@@ -229,7 +232,57 @@ router.post('/users/:userId/suspend', async (req, res) => {
     }
     user.isActive = active
     await user.save()
+
+    // Sync to Firestore for real-time listener (instantly triggers logout/alert for suspended user)
+    await syncUserStatusToFirestore(user._id, active, user.role)
+
+    // Sync updated stats to Firestore for real-time admin overview
+    try {
+      const [totalUsers, pendingVerifications, activeListings, activeAuctions] = await Promise.all([
+        User.countDocuments({ role: { $in: ['buyer', 'seller'] }, isActive: true }),
+        User.countDocuments({ verificationStatus: 'pending', isActive: true }),
+        Material.countDocuments({ isActive: true }),
+        Material.countDocuments({ 'auction.status': 'active' }),
+      ])
+      syncStatsToFirestore({ totalUsers, pendingVerifications, activeListings, activeAuctions })
+    } catch {}
+
     res.json({ message: active ? 'User activated' : 'User suspended', userId: user._id })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// DELETE /api/admin/users/:userId — permanently delete a user and free up their email
+router.delete('/users/:userId', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId)
+    if (!user) return res.status(404).json({ message: 'User not found' })
+
+    if (user.role === 'admin') {
+      return res.status(403).json({ message: 'Admin accounts cannot be deleted from here' })
+    }
+
+    // Delete user & associated profile
+    await User.findByIdAndDelete(user._id)
+    await BusinessProfile.deleteMany({ user: user._id })
+
+    // Clean up from Firestore
+    try {
+      const { db, isFirebaseInitialized, syncStatsToFirestore } = require('../utils/firebase')
+      if (isFirebaseInitialized() && db) {
+        await db.collection('users').doc(user._id.toString()).delete()
+      }
+      const [totalUsers, pendingVerifications, activeListings, activeAuctions] = await Promise.all([
+        User.countDocuments({ role: { $in: ['buyer', 'seller'] }, isActive: true }),
+        User.countDocuments({ verificationStatus: 'pending', isActive: true }),
+        Material.countDocuments({ isActive: true }),
+        Material.countDocuments({ 'auction.status': 'active' }),
+      ])
+      syncStatsToFirestore({ totalUsers, pendingVerifications, activeListings, activeAuctions })
+    } catch {}
+
+    res.json({ message: `User ${user.email} permanently deleted. Email is now available.`, userId: user._id })
   } catch (err) {
     res.status(500).json({ message: err.message })
   }

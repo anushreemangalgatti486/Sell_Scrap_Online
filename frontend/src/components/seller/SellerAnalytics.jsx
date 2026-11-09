@@ -18,11 +18,17 @@ export default function SellerAnalytics({ setTitle }) {
 
   if (loading) return <div style={{ display:'flex',flexDirection:'column',gap:20 }}>{[1,2].map(i=><div key={i} className="skeleton" style={{height:260,borderRadius:'var(--radius-lg)'}}/>)}</div>
 
-  if (!data) return (
-    <div className="empty-state">
-      <div className="empty-state-icon"><BarChart3 size={32}/></div>
+  const hasData = data && (
+    (data.totalListings && data.totalListings > 0) ||
+    (data.monthlySales && data.monthlySales.some(s => s.revenue > 0)) ||
+    (data.demandByCategory && data.demandByCategory.length > 0)
+  )
+
+  if (!data || !hasData) return (
+    <div className="empty-state card" style={{ padding: '60px 24px', textAlign: 'center' }}>
+      <div className="empty-state-icon" style={{ margin: '0 auto 16px' }}><BarChart3 size={32}/></div>
       <h3>No analytics data yet</h3>
-      <p>Start listing materials to see your sales analytics here.</p>
+      <p style={{ color: 'var(--text-muted)' }}>Start listing materials to see your sales and demand analytics here.</p>
     </div>
   )
 

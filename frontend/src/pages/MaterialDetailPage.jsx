@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { materialsAPI, bidsAPI } from '../services/api'
 import Navbar from '../components/common/Navbar'
 import Footer from '../components/common/Footer'
-import useAuctionSocket from '../hooks/useAuctionSocket'
+import { useRealtimeAuction } from '../hooks/useRealtimeAuction'
 import {
   Clock, Package, MapPin, CheckCircle2, ArrowLeft,
   ChevronLeft, ChevronRight, TrendingUp, Scale, Gavel, User
@@ -41,6 +41,7 @@ export default function MaterialDetailPage() {
   const [loading,    setLoading]   = useState(true)
   const [bidAmount,  setBidAmount] = useState('')
   const [placing,    setPlacing]   = useState(false)
+  const [accepting,  setAccepting] = useState(false)
   const [imgIdx,     setImgIdx]    = useState(0)
 
   const fetchMaterial = useCallback(async () => {
@@ -63,8 +64,8 @@ export default function MaterialDetailPage() {
     fetchMaterial()
   }, [fetchMaterial])
 
-  // Real-time socket updates — replaces the old 15-second poll
-  useAuctionSocket(id, {
+  // Real-time Cloud Firestore & Socket updates
+  useRealtimeAuction(id, {
     onBidNew: (data) => {
       // Update bid stats instantly
       setMaterial(prev => prev ? {
@@ -109,6 +110,31 @@ export default function MaterialDetailPage() {
     }
   }
 
+  const handleSellerAcceptBid = async () => {
+    if (!window.confirm(`Accept highest bid of ₹${material.currentHighestBid?.toLocaleString()}/${material.unit} and finalize the sale? This will close the auction and create a transaction.`)) return
+    setAccepting(true)
+    try {
+      await materialsAPI.acceptBid(material._id)
+      toast.success('Bid accepted! Auction closed and transaction created.')
+      fetchMaterial()
+      navigate('/seller/transactions')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to accept bid')
+    } finally {
+      setAccepting(false)
+    }
+  }
+
+  const handleActivateAuction = async () => {
+    try {
+      await materialsAPI.activate(material._id)
+      toast.success('Auction activated! It is now live for bidding.')
+      fetchMaterial()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to activate auction')
+    }
+  }
+
   if (loading) return (
     <div className="detail-loading">
       <Navbar />
@@ -125,7 +151,8 @@ export default function MaterialDetailPage() {
   const isEnded    = material.auction?.status === 'closed'
   const images     = material.images?.length > 0 ? material.images : []
   const minNextBid = (material.currentHighestBid || material.startingPrice) + (material.minBidIncrement || 0)
-  const canBid     = user?.role === 'buyer' && user?.verificationStatus === 'approved' && isActive
+  const isOwner    = user?._id && (material.seller?._id === user._id || material.seller === user._id)
+  const canBid     = user?.role === 'buyer' && user?.verificationStatus === 'approved' && isActive && !isOwner
 
   return (
     <div className="detail-page">
@@ -220,17 +247,65 @@ export default function MaterialDetailPage() {
                     <div className="countdown-label">Auction closes in</div>
                     <Countdown endTime={material.auction.endTime} />
                   </div>
-                ) : (
+                ) : isEnded ? (
                   <div>
                     <div className="countdown-label">Auction closed</div>
                     <span>{format(new Date(material.auction.endTime), 'dd MMM yyyy, hh:mm a')}</span>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="countdown-label">Auction starts in</div>
+                    {material.auction?.startTime ? (
+                      <Countdown endTime={material.auction.startTime} />
+                    ) : (
+                      <span>Scheduled</span>
+                    )}
                   </div>
                 )}
               </div>
             )}
 
-            {/* Bid form */}
-            {canBid ? (
+            {/* Bid form / Seller action panel */}
+            {isOwner ? (
+              <div className="bid-cta-box" style={{ background: 'var(--bg-card)', border: '1.5px solid var(--brand-primary)', padding: 18, borderRadius: 'var(--radius-lg)' }}>
+                <h4 style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--brand-primary)' }}>
+                  <Package size={16} /> Seller Control Panel
+                </h4>
+                <p style={{ fontSize: '0.875rem', marginBottom: 12, color: 'var(--text-muted)' }}>
+                  You listed this material. Sellers cannot place bids on their own materials.
+                </p>
+                {isActive ? (
+                  material.currentHighestBid ? (
+                    <button
+                      className="btn btn-primary"
+                      style={{ width: '100%' }}
+                      onClick={handleSellerAcceptBid}
+                      disabled={accepting}
+                    >
+                      {accepting ? 'Accepting Bid...' : <><CheckCircle2 size={16} /> Accept Highest Bid (₹{material.currentHighestBid?.toLocaleString()}/{material.unit})</>}
+                    </button>
+                  ) : (
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      ● Live Auction: Waiting for buyers to place bids.
+                    </div>
+                  )
+                ) : isEnded ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <span className="badge badge-blue">✓ Auction Closed / Sold</span>
+                    <Link to="/seller/transactions" className="btn btn-primary btn-sm">View Transaction Details</Link>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
+                      Status: <strong>Scheduled</strong> (starts {material.auction?.startTime ? format(new Date(material.auction.startTime), 'dd MMM yyyy, hh:mm a') : 'soon'}).
+                    </p>
+                    <button className="btn btn-primary btn-sm" onClick={handleActivateAuction} style={{ alignSelf: 'flex-start' }}>
+                      <Gavel size={14} /> Start Auction Live Now
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : canBid ? (
               <form className="bid-form" onSubmit={handleBid}>
                 <div className="form-group">
                   <label className="form-label">Your Bid Amount (₹/{material.unit})</label>
@@ -257,14 +332,30 @@ export default function MaterialDetailPage() {
                 <p>Please log in as a verified buyer to place a bid.</p>
                 <Link to="/auth/login?role=buyer" className="btn btn-primary">Login to Bid</Link>
               </div>
+            ) : isEnded ? (
+              <div className="bid-cta-box">
+                <p style={{ color: 'var(--text-muted)' }}>This auction has ended.</p>
+                {material.currentHighestBid ? <span className="badge badge-green">Winning Bid: ₹{material.currentHighestBid?.toLocaleString()}/{material.unit}</span> : null}
+              </div>
             ) : !isActive ? (
               <div className="bid-cta-box">
-                <p style={{ color: 'var(--text-muted)' }}>This auction has {isEnded ? 'ended' : 'not started yet'}.</p>
+                <h4 style={{ margin: '0 0 6px 0' }}>⏰ Auction Scheduled</h4>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: 0 }}>
+                  This auction starts on <strong>{material.auction?.startTime ? format(new Date(material.auction.startTime), 'dd MMM yyyy, hh:mm a') : 'soon'}</strong>. Bidding opens once the auction goes live.
+                </p>
+              </div>
+            ) : user.role !== 'buyer' ? (
+              <div className="bid-cta-box">
+                <p>You are logged in with a <strong>{user.role}</strong> account. Only buyers can place bids.</p>
+                <Link to="/auth/login?role=buyer" className="btn btn-secondary btn-sm">Switch to Buyer Account</Link>
               </div>
             ) : (
-              <div className="bid-cta-box">
-                <p>Complete your business verification to participate in auctions.</p>
-                <Link to="/auth/verify" className="btn btn-primary">Complete Verification</Link>
+              <div className="bid-cta-box" style={{ background: 'var(--amber-50, #fffbeb)', border: '1px solid var(--amber-200, #fde68a)' }}>
+                <h4 style={{ margin: '0 0 4px 0', color: 'var(--amber-800, #92400e)' }}>🔒 Business Verification Required</h4>
+                <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: 'var(--amber-700, #b45309)' }}>
+                  Your business verification status is <strong>{user.verificationStatus?.replace('_', ' ') || 'not verified'}</strong>. Industrial auctions require business KYC approval before placing bids.
+                </p>
+                <Link to="/auth/verify" className="btn btn-primary btn-sm">Submit Business Verification</Link>
               </div>
             )}
 

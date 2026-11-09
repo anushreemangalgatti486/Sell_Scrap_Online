@@ -1,21 +1,13 @@
-import React, { useEffect, useState } from 'react'
-import { Users, Package, Gavel, CreditCard, ShieldCheck } from 'lucide-react'
+import React, { useEffect } from 'react'
+import { Users, Package, Gavel, CreditCard, ShieldCheck, Radio } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { adminAPI } from '../../services/api'
+import { useRealtimeStats } from '../../hooks/useRealtimeStats'
 import { Link } from 'react-router-dom'
 import '../buyer/BuyerComponents.css'
 
 export default function AdminOverview({ setTitle }) {
   useEffect(() => setTitle('Admin Overview'), [])
-  const [stats, setStats] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    adminAPI.getStats()
-      .then(r => setStats(r.data))
-      .catch(() => setStats(null))
-      .finally(() => setLoading(false))
-  }, [])
+  const { stats, loading, isRealtime } = useRealtimeStats()
 
   const CARDS = [
     { label: 'Total Users',         value: stats?.totalUsers        ?? '—', icon: <Users      size={22} />, color: 'stat-icon-blue',  link: '/admin/users' },

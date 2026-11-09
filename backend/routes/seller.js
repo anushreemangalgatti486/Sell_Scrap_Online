@@ -47,12 +47,23 @@ router.get('/analytics', async (req, res) => {
     const materials = await Material.find({ seller: req.user._id }).lean()
     const txns = await Transaction.find({ seller: req.user._id }).lean()
 
+    // Continuous 6-month window
+    const months = []
+    const now = new Date()
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      months.push(d.toLocaleString('default', { month: 'short' }))
+    }
+
     const monthlySalesMap = {}
+    months.forEach(m => { monthlySalesMap[m] = 0 })
     txns.forEach(t => {
-      const key = new Date(t.createdAt).toLocaleString('default', { month: 'short' })
-      monthlySalesMap[key] = (monthlySalesMap[key] || 0) + (t.totalAmount || 0)
+      const key = new Date(t.paidAt || t.createdAt).toLocaleString('default', { month: 'short' })
+      if (monthlySalesMap[key] !== undefined) {
+        monthlySalesMap[key] += (t.totalAmount || 0)
+      }
     })
-    const monthlySales = Object.entries(monthlySalesMap).map(([month, revenue]) => ({ month, revenue }))
+    const monthlySales = months.map(month => ({ month, revenue: monthlySalesMap[month] }))
 
     // Demand by category (bids per category)
     const allBids = await Bid.find({ material: { $in: materials.map(m => m._id) } }).populate('material', 'category').lean()
@@ -63,7 +74,11 @@ router.get('/analytics', async (req, res) => {
     })
     const demandByCategory = Object.entries(catMap).map(([category, bids]) => ({ category, bids }))
 
-    res.json({ monthlySales, demandByCategory })
+    const totalRevenue = txns.reduce((acc, t) => acc + (t.totalAmount || 0), 0)
+    const totalListings = materials.length
+    const totalBidsReceived = allBids.length
+
+    res.json({ totalListings, totalBidsReceived, totalRevenue, monthlySales, demandByCategory })
   } catch (err) {
     res.status(500).json({ message: err.message })
   }

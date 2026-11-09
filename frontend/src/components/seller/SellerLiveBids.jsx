@@ -1,20 +1,41 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { Gavel, Eye, Clock, Package } from 'lucide-react'
-import { materialsAPI, bidsAPI } from '../../services/api'
+import { Gavel, Eye, Clock, CheckCircle2 } from 'lucide-react'
+import { materialsAPI } from '../../services/api'
 import { formatDistanceToNow } from 'date-fns'
+import toast from 'react-hot-toast'
 
 export default function SellerLiveBids({ setTitle }) {
   useEffect(() => setTitle('Live Bids'), [])
-  const [items,   setItems]   = useState([])
-  const [loading, setLoading] = useState(true)
+  const [items,     setItems]     = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [accepting, setAccepting] = useState(null)
 
-  useEffect(() => {
+  const loadItems = useCallback(() => {
+    setLoading(true)
     materialsAPI.getMine({ status: 'active' })
       .then(r => setItems(r.data.materials || []))
       .catch(() => setItems([]))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    loadItems()
+  }, [loadItems])
+
+  const handleAcceptBid = async (m) => {
+    if (!window.confirm(`Accept highest bid of ₹${m.currentHighestBid?.toLocaleString()}/${m.unit} for ${m.name}? This will close the auction and create a transaction.`)) return
+    setAccepting(m._id)
+    try {
+      await materialsAPI.acceptBid(m._id)
+      toast.success(`Bid accepted for ${m.name}! Transaction created.`)
+      loadItems()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to accept bid')
+    } finally {
+      setAccepting(null)
+    }
+  }
 
   if (loading) return <div className="skeleton" style={{ height: 300, borderRadius: 'var(--radius-lg)' }} />
 
@@ -64,9 +85,21 @@ export default function SellerLiveBids({ setTitle }) {
                   </div>
                 )}
               </div>
-              <Link to={`/materials/${m._id}`} className="btn btn-ghost btn-sm">
-                <Eye size={14} /> View Bids
-              </Link>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <Link to={`/materials/${m._id}`} className="btn btn-ghost btn-sm">
+                  <Eye size={14} /> View Details
+                </Link>
+                {m.currentHighestBid ? (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleAcceptBid(m)}
+                    disabled={accepting === m._id}
+                    title="Accept current highest bid and finalize deal"
+                  >
+                    {accepting === m._id ? 'Accepting...' : <><CheckCircle2 size={14} /> Accept Bid</>}
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         ))}

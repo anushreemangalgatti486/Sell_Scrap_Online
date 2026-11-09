@@ -83,7 +83,9 @@ exports.uploadDocument = multer({
 // Helper: extract the public URL from an uploaded file object
 exports.getFileUrl = (file) => {
   if (!file) return null
-  return file.secure_url || file.path || `/uploads/${file.filename}`
+  if (file.secure_url) return file.secure_url
+  if (file.filename)   return `/uploads/${file.filename}`
+  return file.path
 }
 
 exports.cloudinary        = cloudinaryInstance

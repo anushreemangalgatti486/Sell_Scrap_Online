@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { adminAPI } from '../../services/api'
-import { Search, UserX, UserCheck } from 'lucide-react'
+import { Search, UserX, UserCheck, Trash2 } from 'lucide-react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
+import { syncClientUserStatus, removeClientUser } from '../../services/firebase'
 
 // 300 ms debounce helper
 function useDebounce(value, delay = 300) {
@@ -21,6 +22,7 @@ export default function AdminUsers({ setTitle }) {
   const [search,      setSearch]      = useState('')
   const [role,        setRole]        = useState('all')
   const [suspending,  setSuspending]  = useState(null)
+  const [deleting,    setDeleting]    = useState(null)
 
   const debouncedSearch = useDebounce(search)
 
@@ -39,11 +41,25 @@ export default function AdminUsers({ setTitle }) {
     setSuspending(user._id)
     try {
       await adminAPI.suspendUser(user._id, next)
+      syncClientUserStatus(user._id, next)
       toast.success(`User ${next ? 'activated' : 'suspended'}`)
       setUsers(prev => prev.map(u => u._id === user._id ? { ...u, isActive: next } : u))
     } catch (err) {
       toast.error(err.response?.data?.message || `Failed to ${label} user`)
     } finally { setSuspending(null) }
+  }
+
+  const handleDelete = async (user) => {
+    if (!window.confirm(`Permanently delete ${user.name} (${user.email})? This frees up their email address for re-registration.`)) return
+    setDeleting(user._id)
+    try {
+      await adminAPI.deleteUser(user._id)
+      removeClientUser(user._id)
+      toast.success(`User ${user.email} deleted`)
+      setUsers(prev => prev.filter(u => u._id !== user._id))
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete user')
+    } finally { setDeleting(null) }
   }
 
   return (
@@ -102,19 +118,30 @@ export default function AdminUsers({ setTitle }) {
                     </td>
                     <td>{u.createdAt ? format(new Date(u.createdAt), 'dd MMM yyyy') : '—'}</td>
                     <td>
-                      <button
-                        className={`btn btn-sm ${u.isActive === false ? 'btn-secondary' : 'btn-ghost'}`}
-                        onClick={() => handleSuspend(u)}
-                        disabled={suspending === u._id}
-                        title={u.isActive === false ? 'Activate user' : 'Suspend user'}
-                      >
-                        {suspending === u._id
-                          ? '...'
-                          : u.isActive === false
-                            ? <><UserCheck size={13} /> Activate</>
-                            : <><UserX size={13} /> Suspend</>
-                        }
-                      </button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className={`btn btn-sm ${u.isActive === false ? 'btn-secondary' : 'btn-ghost'}`}
+                          onClick={() => handleSuspend(u)}
+                          disabled={suspending === u._id}
+                          title={u.isActive === false ? 'Activate user' : 'Suspend user'}
+                        >
+                          {suspending === u._id
+                            ? '...'
+                            : u.isActive === false
+                              ? <><UserCheck size={13} /> Activate</>
+                              : <><UserX size={13} /> Suspend</>
+                          }
+                        </button>
+                        <button
+                          className="btn btn-sm btn-ghost"
+                          style={{ color: 'var(--red-600, #dc2626)' }}
+                          onClick={() => handleDelete(u)}
+                          disabled={deleting === u._id}
+                          title="Permanently delete user"
+                        >
+                          {deleting === u._id ? '...' : <><Trash2 size={13} /> Delete</>}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

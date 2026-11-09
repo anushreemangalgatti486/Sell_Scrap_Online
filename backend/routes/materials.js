@@ -63,13 +63,26 @@ router.get('/mine', protect, restrictTo('seller'), async (req, res) => {
 // GET /api/materials/:id — single material
 router.get('/:id', async (req, res) => {
   try {
-    const material = await Material
+    const material = await Material.findById(req.params.id)
+    if (!material) return res.status(404).json({ message: 'Material not found' })
+
+    const now = new Date()
+    // Auto-activate if start time has passed or is within 10 minutes
+    if (material.auction?.startTime && ['scheduled', 'draft'].includes(material.auction.status)) {
+      const startTime = new Date(material.auction.startTime)
+      if (startTime <= new Date(now.getTime() + 10 * 60 * 1000)) {
+        material.auction.status = 'active'
+        await material.save()
+      }
+    }
+
+    const safeMaterial = await Material
       .findById(req.params.id)
       .select('-minAcceptablePrice')
       .populate('seller', safePopulate)
       .lean()
-    if (!material) return res.status(404).json({ message: 'Material not found' })
-    res.json({ material })
+
+    res.json({ material: safeMaterial })
   } catch (err) {
     res.status(500).json({ message: err.message })
   }
@@ -91,17 +104,16 @@ router.post('/', protect, restrictTo('seller'), requireVerified, uploadMaterialI
     }
 
     const now = new Date()
-    // Treat naive datetime strings (from datetime-local inputs) as UTC
-    const toUTC = (s) => {
+    const parseDate = (s) => {
       if (!s) return null
-      if (/Z$|[+-]\d{2}:\d{2}$/.test(s)) return new Date(s)
-      return new Date(s + ':00Z')
+      return new Date(s)
     }
-    const startTime = toUTC(auctionStartDate)
-    const endTime   = toUTC(auctionEndDate)
-    let auctionStatus = 'draft'
+    const startTime = parseDate(auctionStartDate) || now
+    const endTime   = parseDate(auctionEndDate)
+    let auctionStatus = 'active'
     if (startTime && endTime) {
-      auctionStatus = startTime <= now ? 'active' : 'scheduled'
+      // 10 minutes buffer: starting today or within 10 minutes activates immediately
+      auctionStatus = startTime <= new Date(now.getTime() + 10 * 60 * 1000) ? 'active' : 'scheduled'
     }
 
     const material = await Material.create({
@@ -133,6 +145,9 @@ router.delete('/:id', protect, restrictTo('seller', 'admin'), async (req, res) =
     if (material.auction?.status === 'active') {
       return res.status(400).json({ message: 'Cannot delete an active auction' })
     }
+    if (material.auction?.status === 'closed' || material.auction?.winner) {
+      return res.status(400).json({ message: 'Cannot delete a material after a bid has been accepted / auction closed' })
+    }
     material.isActive = false
     await material.save()
     res.json({ message: 'Listing removed' })
@@ -157,6 +172,33 @@ router.put('/:id', protect, restrictTo('seller', 'admin'), async (req, res) => {
       return res.status(400).json({ message: 'Cannot edit a listing while auction is active' })
     }
 
+    // Check if seller has accepted the highest bid / auction is closed with a winner
+    const isAcceptedOrSold = material.auction?.status === 'closed' || Boolean(material.auction?.winner)
+
+    if (isAcceptedOrSold) {
+      // After accepting the highest bid, seller CANNOT change any material information except pickup address/location & delivery terms
+      const lockedFields = ['name', 'description', 'specifications', 'grade', 'quantity', 'unit', 'stockAvailability', 'minAcceptablePrice']
+      const changedLockedFields = lockedFields.filter(f => req.body[f] !== undefined && String(req.body[f]) !== String(material[f] ?? ''))
+
+      if (changedLockedFields.length > 0) {
+        return res.status(400).json({
+          message: `The highest bid for this material has already been accepted. Material specifications (${changedLockedFields.join(', ')}) cannot be altered. Only pickup address / location can be updated.`
+        })
+      }
+
+      if (req.body.location !== undefined) {
+        material.location = req.body.location
+      }
+      if (req.body.deliveryTerms !== undefined) {
+        material.deliveryTerms = req.body.deliveryTerms
+      }
+
+      await material.save()
+      const safeObj = material.toObject()
+      delete safeObj.minAcceptablePrice
+      return res.json({ material: safeObj, message: 'Pickup address updated successfully' })
+    }
+
     // Whitelist of editable fields — never allow changing seller or minAcceptablePrice via PUT
     const allowed = [
       'name', 'description', 'specifications', 'grade', 'deliveryTerms',
@@ -175,6 +217,118 @@ router.put('/:id', protect, restrictTo('seller', 'admin'), async (req, res) => {
     const safeObj = material.toObject()
     delete safeObj.minAcceptablePrice
     res.json({ material: safeObj })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// POST /api/materials/:id/accept-bid — seller accepts highest bid & closes auction early
+router.post('/:id/accept-bid', protect, restrictTo('seller', 'admin'), async (req, res) => {
+  try {
+    const material = await Material.findById(req.params.id)
+    if (!material) return res.status(404).json({ message: 'Material not found' })
+
+    if (req.user.role === 'seller' && !material.seller.equals(req.user._id)) {
+      return res.status(403).json({ message: 'Not authorized to accept bids for this material' })
+    }
+
+    if (material.auction?.status !== 'active') {
+      return res.status(400).json({ message: 'Auction is not currently active' })
+    }
+
+    const Bid = require('../models/Bid')
+    const Transaction = require('../models/Transaction')
+    const { createNotification } = require('../utils/notifications')
+    const { emitAuctionClosed } = require('../utils/socket')
+    const { syncAuctionClosedToFirestore } = require('../utils/firebase')
+
+    const winningBid = await Bid.findOne({ material: material._id })
+      .sort({ amount: -1 })
+      .populate('bidder', 'name email businessName')
+
+    if (!winningBid) {
+      return res.status(400).json({ message: 'No bids have been placed on this material yet' })
+    }
+
+    const now = new Date()
+
+    material.auction.status = 'closed'
+    material.auction.closedAt = now
+    material.auction.winner = winningBid.bidder._id
+    material.auction.winningBid = winningBid._id
+    await material.save()
+
+    await Bid.updateMany({ material: material._id, _id: { $ne: winningBid._id } }, { status: 'lost' })
+    await Bid.findByIdAndUpdate(winningBid._id, { status: 'won' })
+
+    const totalAmount = winningBid.amount * material.quantity
+    const tx = await Transaction.create({
+      material:   material._id,
+      buyer:      winningBid.bidder._id,
+      seller:     material.seller,
+      winningBid: winningBid._id,
+      bidAmount:  winningBid.amount,
+      quantity:   material.quantity,
+      unit:       material.unit,
+      totalAmount,
+      paymentStatus: 'advance_pending',
+      advanceStatus: 'pending',
+      advancePercentage: 10,
+    })
+
+    await createNotification(
+      winningBid.bidder._id,
+      'auction_won',
+      `Congratulations! Your bid of ₹${winningBid.amount.toLocaleString()} was accepted by the seller for ${material.name}.`,
+      { materialId: material._id, transactionId: tx._id }
+    )
+
+    await createNotification(
+      material.seller,
+      'transaction',
+      `You accepted the winning bid of ₹${winningBid.amount.toLocaleString()} for ${material.name}. A transaction has been created.`,
+      { materialId: material._id, transactionId: tx._id }
+    )
+
+    emitAuctionClosed(material._id.toString(), {
+      materialId: material._id,
+      status: 'closed',
+      winningBid: winningBid.amount,
+      closedAt: now,
+    })
+
+    syncAuctionClosedToFirestore(material._id, {
+      winningBid: winningBid.amount,
+      winner: winningBid.bidder._id,
+      closedAt: now.toISOString(),
+    })
+
+    res.json({
+      message: 'Bid accepted and auction closed successfully',
+      material,
+      transaction: tx,
+    })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// POST /api/materials/:id/activate — seller or admin activates scheduled/draft auction immediately
+router.post('/:id/activate', protect, restrictTo('seller', 'admin'), async (req, res) => {
+  try {
+    const material = await Material.findById(req.params.id)
+    if (!material) return res.status(404).json({ message: 'Material not found' })
+    if (req.user.role === 'seller' && !material.seller.equals(req.user._id)) {
+      return res.status(403).json({ message: 'Not authorized' })
+    }
+    material.auction.status = 'active'
+    material.auction.startTime = new Date()
+    // Default 3 days if no endTime set
+    if (!material.auction.endTime || new Date(material.auction.endTime) <= new Date()) {
+      material.auction.endTime = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+    }
+    await material.save()
+    res.json({ message: 'Auction is now live', material })
   } catch (err) {
     res.status(500).json({ message: err.message })
   }

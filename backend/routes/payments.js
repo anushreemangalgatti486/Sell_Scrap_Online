@@ -103,6 +103,29 @@ router.post('/create-order', protect, restrictTo('buyer'), async (req, res) => {
 
     const rzp = getRazorpay()
     if (!rzp) {
+      // In development or when test keys are placeholders, create a mock order so testing works
+      if (process.env.NODE_ENV !== 'production' || !process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID === 'rzp_test_your_key_id') {
+        const percentage = await getAdvancePercentage()
+        const totalPaise = tx.totalAmount || 0
+        const advancePaise = calcAdvanceAmount(totalPaise, percentage)
+        const mockOrderId = `order_mock_${Date.now()}`
+
+        tx.razorpayOrderId   = mockOrderId
+        tx.advanceAmount     = advancePaise
+        tx.advancePercentage = percentage
+        tx.advanceStatus     = 'order_created'
+        tx.paymentStatus     = 'advance_pending'
+        await tx.save()
+
+        return res.json({
+          orderId:       mockOrderId,
+          amount:        advancePaise,
+          currency:      'INR',
+          transactionId: tx._id,
+          keyId:         'mock_key',
+          isMock:        true,
+        })
+      }
       return res.status(503).json({ message: 'Razorpay is not configured. Contact administrator.' })
     }
 
@@ -173,6 +196,27 @@ router.post('/verify', protect, restrictTo('buyer'), async (req, res) => {
       return res.status(403).json({ message: 'Unauthorized' })
     }
 
+    // Check if this is a simulated test payment
+    if (razorpayPaymentId.startsWith('mock_pay_')) {
+      tx.razorpayPaymentId  = razorpayPaymentId
+      tx.razorpaySignature  = 'mock_signature'
+      tx.advanceStatus      = 'paid'
+      tx.advancePaidAt      = new Date()
+      tx.paymentStatus      = 'advance_paid'
+      tx.webhookProcessed   = true
+      tx.webhookProcessedAt = new Date()
+      await tx.save()
+
+      await createNotification(tx.buyer, 'payment',
+        `Advance payment of ₹${(tx.advanceAmount / 100).toLocaleString()} verified (Demo mode).`,
+        { transactionId: tx._id })
+      await createNotification(tx.seller, 'payment',
+        `Advance payment of ₹${(tx.advanceAmount / 100).toLocaleString()} received from buyer (Demo mode).`,
+        { transactionId: tx._id })
+
+      return res.json({ verified: true, transaction: tx, mock: true })
+    }
+
     // Verify the signature
     const keySecret = process.env.RAZORPAY_KEY_SECRET
     if (!keySecret) return res.status(500).json({ message: 'Server configuration error' })
@@ -226,6 +270,41 @@ router.post('/verify', protect, restrictTo('buyer'), async (req, res) => {
   } catch (err) {
     console.error('Payment verify error:', err.message)
     res.status(500).json({ message: 'Payment verification failed' })
+  }
+})
+
+// POST /api/payments/mock-advance — dev helper to instantly confirm advance payment
+router.post('/mock-advance', protect, restrictTo('buyer', 'admin'), async (req, res) => {
+  try {
+    const { transactionId } = req.body
+    const tx = await Transaction.findById(transactionId).populate('material')
+    if (!tx) return res.status(404).json({ message: 'Transaction not found' })
+
+    const percentage = tx.advancePercentage || (await getAdvancePercentage())
+    const advancePaise = tx.advanceAmount || calcAdvanceAmount(tx.totalAmount, percentage)
+
+    tx.advanceAmount      = advancePaise
+    tx.advancePercentage  = percentage
+    tx.razorpayOrderId    = `order_mock_${Date.now()}`
+    tx.razorpayPaymentId  = `mock_pay_${Date.now()}`
+    tx.razorpaySignature  = 'mock_signature'
+    tx.advanceStatus      = 'paid'
+    tx.advancePaidAt      = new Date()
+    tx.paymentStatus      = 'advance_paid'
+    tx.webhookProcessed   = true
+    tx.webhookProcessedAt = new Date()
+    await tx.save()
+
+    await createNotification(tx.buyer, 'payment',
+      `Advance payment of ₹${(advancePaise / 100).toLocaleString()} confirmed (Demo Mode).`,
+      { transactionId: tx._id })
+    await createNotification(tx.seller, 'payment',
+      `Advance payment of ₹${(advancePaise / 100).toLocaleString()} received from buyer (Demo Mode). Please coordinate pickup.`,
+      { transactionId: tx._id })
+
+    res.json({ verified: true, message: 'Test advance payment confirmed successfully', transaction: tx })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
   }
 })
 

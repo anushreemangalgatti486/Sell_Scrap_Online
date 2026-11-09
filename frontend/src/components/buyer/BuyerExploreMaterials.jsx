@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, SlidersHorizontal, Clock, Package, X } from 'lucide-react'
+import { Search, SlidersHorizontal, Clock, Package, X, Gavel } from 'lucide-react'
 import { materialsAPI } from '../../services/api'
 import { formatDistanceToNow } from 'date-fns'
 import './BuyerComponents.css'
@@ -53,6 +53,11 @@ function MaterialCard({ m }) {
         )}
         <div className="mat-seller">
           <span className="badge badge-green" style={{ fontSize: '0.7rem' }}>✓ Verified Seller</span>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <span className={`btn btn-sm ${isActive ? 'btn-primary' : 'btn-secondary'}`} style={{ width: '100%', justifyContent: 'center' }}>
+            <Gavel size={14} /> {isActive ? 'Place Bid' : 'View Auction'}
+          </span>
         </div>
       </div>
     </Link>
