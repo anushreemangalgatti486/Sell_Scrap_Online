@@ -5,7 +5,7 @@ import React, {
 import { io } from 'socket.io-client'
 import api from '../services/api'
 import toast from 'react-hot-toast'
-import { db, isFirebaseConfigured } from '../services/firebase'
+import { db, isFirebaseConfigured, signInWithGooglePopup, firebaseSignOut } from '../services/firebase'
 import { doc, onSnapshot } from 'firebase/firestore'
 
 const AuthContext = createContext()
@@ -115,6 +115,16 @@ export function AuthProvider({ children }) {
     return user
   }, [])
 
+  const loginWithGoogle = useCallback(async (role) => {
+    const idToken = await signInWithGooglePopup()
+    const res = await api.post('/auth/google', { idToken, role })
+    const { token, user, isNewUser } = res.data
+    localStorage.setItem('sb_token', token)
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    setUser(user)
+    return { user, isNewUser }
+  }, [])
+
   const register = useCallback(async (data) => {
     const res = await api.post('/auth/register', data)
     const { token, user } = res.data
@@ -127,6 +137,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(() => {
     localStorage.removeItem('sb_token')
     delete api.defaults.headers.common['Authorization']
+    firebaseSignOut()
     if (socketRef.current) {
       socketRef.current.disconnect()
       socketRef.current = null
@@ -167,7 +178,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, loading, login, register, logout, updateUser,
+      user, loading, login, loginWithGoogle, register, logout, updateUser,
       unreadCount, clearUnread,
     }}>
       {children}

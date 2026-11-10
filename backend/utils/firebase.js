@@ -1,9 +1,14 @@
-const admin = require('firebase-admin')
+const { initializeApp, cert, getApps, getApp } = require('firebase-admin/app')
+const { getAuth } = require('firebase-admin/auth')
+const { getFirestore, FieldValue } = require('firebase-admin/firestore')
 const path = require('path')
 const fs = require('fs')
 
 let isFirebaseInitialized = false
+let isAuthInitialized = false
+let app = null
 let db = null
+let authAdmin = null
 
 try {
   let credential = null
@@ -14,10 +19,10 @@ try {
 
   if (fs.existsSync(serviceAccountPath)) {
     const serviceAccount = require(serviceAccountPath)
-    credential = admin.credential.cert(serviceAccount)
+    credential = cert(serviceAccount)
   } else if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PROJECT_ID) {
     // 2. Check for individual environment variables
-    credential = admin.credential.cert({
+    credential = cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
       privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
@@ -25,15 +30,33 @@ try {
   }
 
   if (credential) {
-    admin.initializeApp({ credential })
-    db = admin.firestore()
+    app = getApps().length ? getApp() : initializeApp({ credential })
+    db = getFirestore(app)
+    authAdmin = getAuth(app)
     isFirebaseInitialized = true
-    console.log('✓ Firebase Admin initialized with Firestore')
+    isAuthInitialized = true
+    console.log('✓ Firebase Admin initialized with Firestore & Auth')
+  } else if (process.env.FIREBASE_PROJECT_ID) {
+    // Initialize Auth verifier with projectId alone (verifies ID tokens via Google public x509 certs)
+    app = getApps().length ? getApp() : initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID })
+    authAdmin = getAuth(app)
+    isAuthInitialized = true
+    console.log(`✓ Firebase Admin Auth initialized for project ${process.env.FIREBASE_PROJECT_ID}`)
   } else {
-    console.log('ℹ Firebase Admin: No credentials provided. Running in hybrid fallback mode.')
+    console.log('ℹ Firebase Admin: No credentials or project ID provided. Running in hybrid fallback mode.')
   }
 } catch (err) {
   console.warn('⚠️ Firebase Admin initialization failed:', err.message)
+}
+
+/**
+ * Verify a Firebase ID token obtained from client Google Sign-In
+ */
+async function verifyFirebaseIdToken(idToken) {
+  if (!isAuthInitialized || !authAdmin) {
+    throw new Error('Firebase Auth is not initialized on the server')
+  }
+  return authAdmin.verifyIdToken(idToken)
 }
 
 /**
@@ -44,7 +67,7 @@ async function syncStatsToFirestore(stats) {
   try {
     await db.collection('platform').doc('stats').set({
       ...stats,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true })
   } catch (err) {
     console.error('Failed to sync stats to Firestore:', err.message)
@@ -61,7 +84,7 @@ async function syncUserStatusToFirestore(userId, isActive, role) {
     await db.collection('users').doc(userId.toString()).set({
       isActive,
       role,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true })
   } catch (err) {
     console.error(`Failed to sync user ${userId} to Firestore:`, err.message)
@@ -83,7 +106,7 @@ async function syncBidToFirestore(materialId, bidData) {
         anonymousLabel: bidData.anonymousLabel,
         createdAt: bidData.createdAt || new Date().toISOString(),
       },
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true })
   } catch (err) {
     console.error(`Failed to sync bid for material ${materialId} to Firestore:`, err.message)
@@ -101,7 +124,7 @@ async function syncAuctionClosedToFirestore(materialId, closeData) {
       winningBid: closeData.winningBid,
       winner: closeData.winner ? closeData.winner.toString() : null,
       closedAt: closeData.closedAt || new Date().toISOString(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true })
   } catch (err) {
     console.error(`Failed to sync auction close for ${materialId} to Firestore:`, err.message)
@@ -109,9 +132,10 @@ async function syncAuctionClosedToFirestore(materialId, closeData) {
 }
 
 module.exports = {
-  admin,
   db,
   isFirebaseInitialized: () => isFirebaseInitialized,
+  isAuthInitialized: () => isAuthInitialized,
+  verifyFirebaseIdToken,
   syncStatsToFirestore,
   syncUserStatusToFirestore,
   syncBidToFirestore,

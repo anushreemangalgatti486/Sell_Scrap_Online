@@ -185,6 +185,15 @@ export default function VerifyPage() {
             <button type="submit" className="btn btn-primary w-full btn-lg" disabled={loading}>
               {loading ? <><div className="spinner" /> Submitting...</> : 'Submit for Verification'}
             </button>
+            {user?.role && user.role !== 'admin' && (
+              <button
+                type="button"
+                className="btn btn-ghost w-full"
+                onClick={() => navigate(`/${user.role}/overview`)}
+              >
+                Skip for now — Explore Dashboard
+              </button>
+            )}
           </form>
         </div>
       </div>

@@ -2,9 +2,11 @@ const express  = require('express')
 const router   = express.Router()
 const crypto   = require('crypto')
 const User     = require('../models/User')
-const { sendTokenResponse } = require('../utils/jwt')
+const Material = require('../models/Material')
+const { signToken, sendTokenResponse } = require('../utils/jwt')
 const { sendPasswordResetEmail } = require('../utils/email')
 const { protect } = require('../middleware/auth')
+const { verifyFirebaseIdToken, isAuthInitialized, syncStatsToFirestore } = require('../utils/firebase')
 
 /* ── helpers ── */
 const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
@@ -63,6 +65,10 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: `No ${role} account found with this email` })
     }
 
+    if (!user.password && user.authProvider === 'google') {
+      return res.status(401).json({ message: 'This account uses Google Sign-In. Please click "Continue with Google" to log in.' })
+    }
+
     const isMatch = await user.comparePassword(password)
     if (!isMatch) return res.status(401).json({ message: 'Invalid email or password' })
 
@@ -72,6 +78,102 @@ router.post('/login', async (req, res) => {
   } catch (err) {
     console.error('Login error:', err.message)
     res.status(500).json({ message: 'Login failed. Please try again.' })
+  }
+})
+
+// POST /api/auth/google — sign in or register via Firebase Google ID token
+router.post('/google', async (req, res) => {
+  try {
+    const idToken = typeof req.body.idToken === 'string' ? req.body.idToken.trim() : ''
+    const role    = sanitiseStr(req.body.role) || 'buyer'
+
+    if (!idToken) {
+      return res.status(400).json({ message: 'Google authentication token is required' })
+    }
+    if (!isAuthInitialized()) {
+      return res.status(503).json({ message: 'Google Sign-In is not configured on the server.' })
+    }
+
+    let decoded
+    try {
+      decoded = await verifyFirebaseIdToken(idToken)
+    } catch (verifyErr) {
+      console.error('Google token verification failed:', verifyErr.code || verifyErr.message)
+      return res.status(401).json({ message: 'Google sign-in session could not be verified. Please try again.' })
+    }
+
+    const email = sanitiseStr(decoded.email).toLowerCase()
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ message: 'A valid Google email address is required' })
+    }
+    if (decoded.email_verified === false) {
+      return res.status(400).json({ message: 'Please verify your Google account email address first.' })
+    }
+
+    let user = await User.findOne({ email })
+
+    if (user) {
+      if (!user.isActive) {
+        return res.status(401).json({ message: 'Account has been deactivated' })
+      }
+      if (role && user.role !== role) {
+        return res.status(401).json({
+          message: `This Google email is registered as a ${user.role}. Please select the ${user.role} option to sign in.`,
+        })
+      }
+
+      let updated = false
+      if (!user.googleUid && decoded.uid) {
+        user.googleUid = decoded.uid
+        updated = true
+      }
+      if (decoded.picture && user.avatar !== decoded.picture) {
+        user.avatar = decoded.picture
+        updated = true
+      }
+      if (updated) await user.save({ validateModifiedOnly: true })
+
+      const token = signToken(user._id, user.role)
+      return res.status(200).json({ token, user: user.toPublic(), isNewUser: false })
+    }
+
+    // New user registration via Google — only buyer and seller allowed
+    if (role === 'admin') {
+      return res.status(403).json({
+        message: 'No administrator account exists for this Google email. Admin accounts cannot be created via Google Sign-In.',
+      })
+    }
+    if (!['buyer', 'seller'].includes(role)) {
+      return res.status(400).json({ message: 'Please choose Buyer or Seller to continue with Google.' })
+    }
+
+    const displayName = sanitiseStr(decoded.name) || email.split('@')[0]
+    user = await User.create({
+      name: displayName,
+      email,
+      role,
+      authProvider: 'google',
+      googleUid: decoded.uid,
+      avatar: decoded.picture || undefined,
+      isActive: true,
+    })
+
+    // Sync updated stats to Firestore (best-effort)
+    try {
+      const [totalUsers, pendingVerifications, activeListings, activeAuctions] = await Promise.all([
+        User.countDocuments({ role: { $in: ['buyer', 'seller'] }, isActive: true }),
+        User.countDocuments({ verificationStatus: 'pending', isActive: true }),
+        Material.countDocuments({ isActive: true }),
+        Material.countDocuments({ 'auction.status': 'active' }),
+      ])
+      syncStatsToFirestore({ totalUsers, pendingVerifications, activeListings, activeAuctions })
+    } catch {}
+
+    const token = signToken(user._id, user.role)
+    res.status(201).json({ token, user: user.toPublic(), isNewUser: true })
+  } catch (err) {
+    console.error('Google auth error:', err.message)
+    res.status(500).json({ message: 'Google sign-in failed. Please try again.' })
   }
 })
 

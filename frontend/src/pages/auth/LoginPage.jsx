@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { Eye, EyeOff, ShieldCheck, Users, Truck, ArrowLeft } from 'lucide-react'
+import GoogleAuthButton from '../../components/common/GoogleAuthButton'
 import toast from 'react-hot-toast'
 import './AuthPages.css'
 
@@ -122,12 +123,16 @@ export default function LoginPage() {
           </form>
 
           {role !== 'admin' && (
-            <p className="auth-switch">
-              Don't have an account?{' '}
-              <Link to={`/auth/register?role=${role}`} className="auth-link">
-                Register as {role === 'buyer' ? 'Buyer' : 'Seller'}
-              </Link>
-            </p>
+            <>
+              <div className="auth-divider"><span>or</span></div>
+              <GoogleAuthButton role={role} disabled={loading} />
+              <p className="auth-switch">
+                Don't have an account?{' '}
+                <Link to={`/auth/register?role=${role}`} className="auth-link">
+                  Register as {role === 'buyer' ? 'Buyer' : 'Seller'}
+                </Link>
+              </p>
+            </>
           )}
 
           <div className="auth-divider"><span>Secure login — ScrapBazaar</span></div>

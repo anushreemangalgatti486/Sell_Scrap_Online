@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { Eye, EyeOff, Users, Truck, ArrowLeft, CheckCircle2 } from 'lucide-react'
+import GoogleAuthButton from '../../components/common/GoogleAuthButton'
 import toast from 'react-hot-toast'
 import './AuthPages.css'
 
@@ -72,6 +73,9 @@ export default function RegisterPage() {
               <Truck size={20} /> <span>Register as Seller</span>
             </button>
           </div>
+
+          <GoogleAuthButton role={role} disabled={loading} />
+          <div className="auth-divider" style={{ marginBottom: 16 }}><span>or register with email</span></div>
 
           <form onSubmit={handleSubmit} className="auth-form">
             <div className="grid-2" style={{ gap: 12 }}>

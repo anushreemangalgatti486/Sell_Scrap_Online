@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app'
 import { getFirestore, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
-import { getAuth } from 'firebase/auth'
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -65,6 +65,44 @@ export async function removeClientUser(userId) {
     await deleteDoc(doc(db, 'users', userId.toString()))
   } catch (err) {
     console.warn('Failed to delete user doc in Firestore:', err.message)
+  }
+}
+
+const googleProvider = new GoogleAuthProvider()
+googleProvider.setCustomParameters({ prompt: 'select_account' })
+
+const GOOGLE_AUTH_ERRORS = {
+  'auth/popup-closed-by-user':    'Google sign-in popup was closed before completing.',
+  'auth/cancelled-popup-request': 'Sign-in request was cancelled. Please try again.',
+  'auth/popup-blocked':           'Popup was blocked by your browser. Please allow popups for this site.',
+  'auth/unauthorized-domain':     'This domain is not authorized in Firebase Auth settings. Add it under Authentication > Settings > Authorized domains.',
+  'auth/operation-not-allowed':   'Google Sign-In is not enabled yet in Firebase Console (Authentication > Sign-in method > Google).',
+}
+
+export async function signInWithGooglePopup() {
+  if (!isFirebaseConfigured || !auth) {
+    throw new Error('Firebase Authentication is not configured.')
+  }
+  try {
+    const result = await signInWithPopup(auth, googleProvider)
+    return await result.user.getIdToken()
+  } catch (err) {
+    const friendly = GOOGLE_AUTH_ERRORS[err.code]
+    if (friendly) {
+      const wrapped = new Error(friendly)
+      wrapped.code = err.code
+      throw wrapped
+    }
+    throw err
+  }
+}
+
+export async function firebaseSignOut() {
+  if (!auth) return
+  try {
+    await signOut(auth)
+  } catch (err) {
+    console.warn('Firebase signOut failed:', err.message)
   }
 }
 

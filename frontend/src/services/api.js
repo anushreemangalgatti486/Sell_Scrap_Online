@@ -36,11 +36,12 @@ export default api
 
 // Convenience helpers
 export const authAPI = {
-  login:    (data) => api.post('/auth/login', data),
-  register: (data) => api.post('/auth/register', data),
-  me:       ()     => api.get('/auth/me'),
-  forgot:   (email)=> api.post('/auth/forgot-password', { email }),
-  reset:    (data) => api.post('/auth/reset-password', data),
+  login:       (data) => api.post('/auth/login', data),
+  googleLogin: (data) => api.post('/auth/google', data),
+  register:    (data) => api.post('/auth/register', data),
+  me:          ()     => api.get('/auth/me'),
+  forgot:      (email)=> api.post('/auth/forgot-password', { email }),
+  reset:       (data) => api.post('/auth/reset-password', data),
 }
 
 export const materialsAPI = {

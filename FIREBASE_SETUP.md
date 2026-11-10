@@ -58,3 +58,9 @@ This project is now equipped with **Google Cloud Firestore** for instant real-ti
 
 3. **Live Bidding & Auction Closure**:
    - `useRealtimeAuction` streams new bids and closed states directly from Firestore `auctions/{materialId}`.
+
+4. **Continue with Google Sign-In (`POST /api/auth/google`)**:
+   - Enables 1-click Google login & buyer/seller signup via Firebase Authentication.
+   - Make sure **Google** is enabled in Firebase Console:
+     1. Open **Authentication** → **Sign-in method** → **Add new provider** → **Google** → **Enable** → **Save**.
+     2. Under **Authentication** → **Settings** → **Authorized domains**, confirm `localhost` is listed (it is included by default).
