@@ -1,0 +1,33 @@
+{
+  "name": "scrapbazaar-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node node_modules/vite/bin/vite.js",
+    "build": "node node_modules/vite/bin/vite.js build",
+    "preview": "node node_modules/vite/bin/vite.js preview"
+  },
+  "dependencies": {
+    "@radix-ui/react-tabs": "^1.2.1",
+    "axios": "^1.7.7",
+    "date-fns": "^4.1.0",
+    "firebase": "^13.2.0",
+    "lucide-react": "^0.453.0",
+    "motion": "^14.9.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-dropzone": "^14.2.10",
+    "react-hot-toast": "^2.4.1",
+    "react-router-dom": "^6.26.2",
+    "recharts": "^2.13.0",
+    "roughjs": "^4.6.6",
+    "socket.io-client": "^4.8.4"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.2",
+    "vite": "^5.4.9"
+  }
+}
